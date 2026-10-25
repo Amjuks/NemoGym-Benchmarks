@@ -1,0 +1,4 @@
+user: |-
+  Answer the question. Return only the final answer.
+
+  {question}

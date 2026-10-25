@@ -1,0 +1,450 @@
+# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""ChatCompletionsClient subclass with dynamic max_completion_tokens + graceful length-finish handling.
+
+Stirrup's ``ChatCompletionsClient.generate()`` has two behaviours
+that break on long-context models served by vLLM:
+
+1. It sends ``max_completion_tokens = self._max_tokens`` with every call —
+   a static value that does not account for the input size.  When the
+   prompt consumes a non-trivial fraction of the model's context window,
+   the server can return ``finish_reason=length`` with zero output tokens.
+
+2. On any ``finish_reason in ("max_tokens", "length")`` it raises
+   ``ContextOverflowError`` unconditionally, even when the response has
+   valid partial content.  For reasoning models whose traces can be
+   genuinely long, this turns a normal "ran out of output budget" event
+   into a fatal error.
+
+This subclass addresses both.  Before each call we estimate the prompt's
+tokens from its character count and size ``max_completion_tokens`` as::
+
+    context_window − estimated(messages) − completion_token_buffer
+
+raised toward a configurable minimum (historically 1,024 tokens), subject to
+the hard cap. The floor holds even past the estimated context, because the
+estimate can substantially overcount retained reasoning. On the response
+side, we replicate Stirrup parsing but do *not* raise on
+``finish_reason=length`` — the agent loop will either terminate when the
+model invokes the ``finish`` tool or exhaust ``max_turns``, yielding a
+clean timeout instead of a crash.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from time import perf_counter
+from typing import TYPE_CHECKING, Any, Optional
+
+import stirrup.core.agent as _stirrup_agent_mod
+from pydantic import ValidationError as _PydanticValidationError
+from stirrup.clients.chat_completions_client import ChatCompletionsClient
+from stirrup.clients.utils import to_openai_tools
+from stirrup.core.models import (
+    AssistantMessage,
+    ChatMessage,
+    Reasoning,
+    TokenUsage,
+    Tool,
+    ToolCall,
+)
+
+from responses_api_agents.stirrup_agent.stirrup_utils import to_provider_openai_messages
+
+
+if TYPE_CHECKING:
+    from nemo_gym.openai_utils import NeMoGymChatCompletionMessageParam
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+# Monkey-patch stirrup.core.agent.Agent.run_tool to surface pydantic
+# ValidationError detail into the ToolResult content. Upstream stirrup
+# returns the bare string "Tool arguments are not valid", hiding the
+# pydantic error detail (e.g., "paths: Input should be a valid list,
+# input_type=str"). Without that detail the agent has no signal to
+# self-correct and just retries the same broken shape forever.
+#
+# Observed on DSv4-Pro GDPVal r5/r7: the model emitted `paths` as a JSON
+# string literal ("[]") instead of a JSON array ([]). All ~660 finish
+# attempts in r5 failed with the same bare-string error; the agent
+# never learned what was wrong.
+def _install_tool_arg_error_surfacing() -> None:
+    _orig_run_tool = _stirrup_agent_mod.Agent.run_tool
+    if getattr(_orig_run_tool, "_gym_surfacing_patched", False):
+        return
+
+    async def run_tool_with_error_surfacing(self, tool_call, run_metadata):
+        result_msg = await _orig_run_tool(self, tool_call, run_metadata)
+        if (not getattr(result_msg, "args_was_valid", True)) and result_msg.content == "Tool arguments are not valid":
+            # Mirror upstream stirrup's lookup: self._active_tools is the {name: Tool}
+            # dict built from self._tools filtered by isinstance(Tool). Looking up
+            # via the dict avoids iterating self._tools which mixes Tool instances
+            # with provider objects (e.g. ApptainerCodeExecToolProvider) that don't
+            # have a .name attribute and crash a naive `t.name` lookup.
+            tool = self._active_tools.get(tool_call.name)
+            if tool is not None:
+                args = tool_call.arguments if tool_call.arguments and tool_call.arguments.strip() else "{}"
+                try:
+                    tool.parameters.model_validate_json(args)
+                except _PydanticValidationError as exc:
+                    errors_str = "; ".join(
+                        f"{'.'.join(str(p) for p in e['loc']) or '<root>'}: {e['msg']} (type={e.get('type', '?')})"
+                        for e in exc.errors()
+                    )
+                    args_preview = (tool_call.arguments or "")[:500]
+                    detailed = (
+                        f"Tool arguments are not valid: {errors_str}. "
+                        f"Submitted arguments (first 500 chars): {args_preview!r}"
+                    )
+                    result_msg = result_msg.model_copy(update={"content": detailed})
+                except Exception:
+                    pass
+        return result_msg
+
+    run_tool_with_error_surfacing._gym_surfacing_patched = True
+    _stirrup_agent_mod.Agent.run_tool = run_tool_with_error_surfacing
+
+
+_install_tool_arg_error_surfacing()
+
+
+# Target floor for per-call max_completion_tokens. Below this the model usually
+# cannot produce a useful answer. The hard cap always takes precedence.
+_MIN_COMPLETION_TOKENS = 1024
+
+# Hard cap on per-call max_completion_tokens.  Oversized completion budgets
+# on long-context servers can degrade output quality for reasoning models.
+_DEFAULT_MAX_COMPLETION_TOKENS_CAP = 64000
+
+# ---------------------------------------------------------------------------
+# Thinking-overrun recovery
+#
+# Measured on a 200-task GDPVal run (GLM-5.2 FP8, 27.4 M output tokens across
+# 10,448 calls): 68 calls burned the entire 64 k completion budget emitting a
+# ``<think>`` block and returned *no tool call*.  That is 28.5 h of decode —
+# 15.8% of all model time — spent on turns that advanced their task zero steps.
+#
+# The failure is sticky rather than isolated.  Those 68 calls form 33 runs, 18
+# of them longer than one turn (run lengths 1x15, 2x6, 3x9, 4x1, 5x2), because
+# Stirrup answers a tool-call-less turn with a generic "Please continue the
+# task" — which invites the model straight back into another unbounded think.
+#
+# Shrinking the budget on the retry is the obvious fix and it is wrong: of the
+# 26 turns that *did* recover with a tool call, the median emitted 34,653
+# tokens (max 61,551) because the model dumps the whole deliverable at once.
+# Clamping the budget would convert recoveries into truncated tool calls.
+#
+# So the retry keeps its full token budget and instead removes the thing that
+# overran: thinking is disabled for that one turn and a short instruction says
+# the previous turn was discarded.  Costs nothing when no overrun happens.
+_TRUNCATION_RECOVERY_NUDGE = (
+    "SYSTEM NOTICE: your previous response hit the output token limit before it "
+    "produced a tool call, so it was discarded and none of that reasoning was "
+    "saved. Do not start that analysis over. Act now on what you already know: "
+    "respond with a tool call and keep any preamble to a few sentences."
+)
+
+
+class DynamicMaxTokensChatCompletionsClient(ChatCompletionsClient):
+    """ChatCompletionsClient that sizes max_completion_tokens per call and
+    does not raise on a length-finish response."""
+
+    def __init__(
+        self,
+        *args: Any,
+        completion_token_buffer: int = 1000,
+        temperature: float = 1.0,
+        top_p: float = 0.95,
+        enable_thinking: bool = True,
+        max_completion_tokens_cap: int = _DEFAULT_MAX_COMPLETION_TOKENS_CAP,
+        min_completion_tokens: int = _MIN_COMPLETION_TOKENS,
+        prompt_estimator_truncate_history_thinking: Optional[bool] = None,
+        truncation_recovery: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        if max_completion_tokens_cap < 1:
+            raise ValueError("max_completion_tokens_cap must be at least 1")
+        if min_completion_tokens < 1:
+            raise ValueError("min_completion_tokens must be at least 1")
+        self._completion_token_buffer = completion_token_buffer
+        self._temperature = temperature
+        self._top_p = top_p
+        self._enable_thinking = enable_thinking
+        self._max_completion_tokens_cap = max_completion_tokens_cap
+        self._min_completion_tokens = min_completion_tokens
+        self._prompt_estimator_truncate_history_thinking = prompt_estimator_truncate_history_thinking
+        self._truncation_recovery = truncation_recovery
+        # Set when the previous call exhausted its completion budget without
+        # emitting a tool call; consumed by the very next generate().
+        self._recover_from_truncation = False
+        self._truncation_overruns = 0
+
+    # ------------------------------------------------------------------
+    # Token counting
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _truncate_prior_assistant_text_for_estimate(content: str, *, has_tool_calls: bool) -> str:
+        """Mirror Nemotron's historical-assistant rendering for one text value."""
+        # The template first inserts an empty reasoning block when neither tag
+        # is present. This matters for both its normal and tool-call branches.
+        if "<think>" not in content and "</think>" not in content:
+            content = f"<think></think>{content}"
+
+        if has_tool_calls:
+            if not content.strip():
+                return "<think></think>"
+            if "</think>" in content:
+                content = content.rsplit("</think>", 1)[-1]
+            elif "<think>" in content:
+                content = content.split("<think>", 1)[0]
+            return f"<think></think>{content}"
+
+        if "<think>" in content and "</think>" in content:
+            content = f"<think></think>{content.rsplit('</think>', 1)[-1]}"
+        return content.strip()
+
+    def _messages_for_estimator_count(
+        self,
+        messages: list[NeMoGymChatCompletionMessageParam],
+    ) -> list[NeMoGymChatCompletionMessageParam]:
+        """Return the history shape rendered by Nemotron's truncation mode.
+
+        This is estimator-only: it never changes the retained trajectory or
+        request. Tool calls and every other serialized field stay intact.
+        """
+        if self._prompt_estimator_truncate_history_thinking is not True:
+            return messages
+
+        last_user_index = max(
+            (index for index, message in enumerate(messages) if message.get("role") == "user"),
+            default=-1,
+        )
+        if last_user_index < 0:
+            return messages
+
+        counted_messages: list[NeMoGymChatCompletionMessageParam] = []
+        for index, message in enumerate(messages):
+            if index >= last_user_index or message.get("role") != "assistant":
+                counted_messages.append(message)
+                continue
+
+            content = message.get("content")
+            estimated_content: Any = content
+            has_tool_calls = bool(message.get("tool_calls"))
+            if isinstance(content, str):
+                estimated_content = self._truncate_prior_assistant_text_for_estimate(
+                    content,
+                    has_tool_calls=has_tool_calls,
+                )
+            elif isinstance(content, list):
+                estimated_parts = []
+                changed = False
+                for part in content:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        estimated_text = self._truncate_prior_assistant_text_for_estimate(
+                            part["text"],
+                            has_tool_calls=has_tool_calls,
+                        )
+                        if estimated_text != part["text"]:
+                            part = {**part, "text": estimated_text}
+                            changed = True
+                    estimated_parts.append(part)
+                if changed:
+                    estimated_content = estimated_parts
+
+            if estimated_content is content or estimated_content == content:
+                counted_messages.append(message)
+            else:
+                counted_messages.append({**message, "content": estimated_content})
+        return counted_messages
+
+    def _count_input_tokens(
+        self,
+        messages: list[NeMoGymChatCompletionMessageParam],
+        tools: Optional[dict[str, Tool]] = None,
+    ) -> int:
+        """Estimate the prompt tokens from the complete serialized payload, tool calls and schemas included.
+
+        ``messages`` must already be serialized for the provider. Any residual gap is absorbed by
+        ``completion_token_buffer``.
+        """
+        counted_messages = self._messages_for_estimator_count(messages)
+        total = len(json.dumps(counted_messages, ensure_ascii=False)) // 3
+        if tools:
+            try:
+                total += len(json.dumps(to_openai_tools(tools))) // 3
+            except Exception:
+                pass
+        return total
+
+    async def generate(
+        self,
+        messages: list[ChatMessage],
+        tools: dict[str, Tool],
+    ) -> AssistantMessage:
+        provider_messages = to_provider_openai_messages(messages)
+
+        # Recovery turn: the previous call spent its whole completion budget
+        # thinking and never reached a tool call. Steer this one turn — thinking
+        # off, explicit instruction — but leave the token budget alone, because
+        # the recovery itself is usually a large single-shot deliverable write.
+        # The nudge is transient: it is sent to the server but never enters the
+        # agent's message history, so trajectories stay clean.
+        recovering = self._recover_from_truncation and self._truncation_recovery
+        self._recover_from_truncation = False
+        if recovering:
+            provider_messages = [*provider_messages, {"role": "user", "content": _TRUNCATION_RECOVERY_NUDGE}]
+
+        input_tokens = self._count_input_tokens(provider_messages, tools)
+        dynamic_max = max(
+            self._max_tokens - input_tokens - self._completion_token_buffer,
+            self._min_completion_tokens,
+        )
+        capped_max = min(dynamic_max, self._max_completion_tokens_cap)
+
+        # ``self._kwargs`` is spread last so explicit per-request kwargs override
+        # the agent-level defaults.
+        request_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": provider_messages,
+            "temperature": self._temperature,
+            "top_p": self._top_p,
+            "max_completion_tokens": capped_max,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": self._enable_thinking and not recovering}},
+            **self._kwargs,
+        }
+        if tools:
+            request_kwargs["tools"] = to_openai_tools(tools)
+            request_kwargs["tool_choice"] = "auto"
+        if self._reasoning_effort:
+            request_kwargs["reasoning_effort"] = self._reasoning_effort
+
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            _msgs = request_kwargs["messages"]
+            _tools = request_kwargs.get("tools") or []
+            LOGGER.debug(
+                "request: n_messages=%d first_role=%s last_role=%s "
+                "msg_content_chars=%d n_tools=%d model=%r max_completion_tokens=%d",
+                len(_msgs),
+                _msgs[0].get("role") if _msgs else "?",
+                _msgs[-1].get("role") if _msgs else "?",
+                sum(len(str(m.get("content") or "")) for m in _msgs),
+                len(_tools),
+                request_kwargs.get("model"),
+                request_kwargs.get("max_completion_tokens"),
+            )
+
+        request_start_time = perf_counter()
+        try:
+            response = await self._client.chat.completions.create(**request_kwargs)
+        except Exception as exc:
+            LOGGER.error("API call raised %s: %s", type(exc).__name__, exc)
+            raise
+        request_end_time = perf_counter()
+
+        choice = response.choices[0]
+        msg = choice.message
+        usage = response.usage
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        reasoning_tokens = 0
+        if usage and hasattr(usage, "completion_tokens_details") and usage.completion_tokens_details:
+            reasoning_tokens = getattr(usage.completion_tokens_details, "reasoning_tokens", 0) or 0
+        answer_tokens = completion_tokens - reasoning_tokens
+
+        LOGGER.debug(
+            "response: input_est=%d ctx=%d buf=%d -> max_completion=%d (capped=%d) | "
+            "actual prompt=%d completion=%d (reasoning=%d) finish=%s "
+            "content_len=%d tool_calls=%d",
+            input_tokens,
+            self._max_tokens,
+            self._completion_token_buffer,
+            dynamic_max,
+            capped_max,
+            prompt_tokens,
+            completion_tokens,
+            reasoning_tokens,
+            choice.finish_reason,
+            len(msg.content or ""),
+            len(msg.tool_calls or []),
+        )
+
+        # Upstream raises ContextOverflowError on length/max_tokens; we don't.
+        # The agent loop handles termination either via the finish tool or max_turns.
+
+        reasoning: Optional[Reasoning] = None
+        if hasattr(msg, "reasoning_content") and msg.reasoning_content:
+            reasoning = Reasoning(content=msg.reasoning_content)
+        elif hasattr(msg, "reasoning") and msg.reasoning:
+            # vLLM >= 0.16.0 emits `reasoning` (Responses-API convention) instead of
+            # `reasoning_content`; e.g. DeepSeek-V4's `--reasoning-parser deepseek_v4`.
+            reasoning = Reasoning(content=msg.reasoning)
+
+        tool_calls = [
+            ToolCall(
+                tool_call_id=tc.id,
+                name=tc.function.name,
+                arguments=tc.function.arguments or "",
+            )
+            for tc in (msg.tool_calls or [])
+        ]
+
+        # A call that exhausted its completion budget without a schema-valid
+        # tool call advanced the task by nothing. Parser-truncated calls often
+        # surface as ``code_exec({})``; treating their mere presence as progress
+        # creates a sticky invalid-call loop.
+        usable_tool_call = False
+        for tool_call in tool_calls:
+            tool = tools.get(tool_call.name)
+            if tool is None:
+                # We cannot safely validate an unknown provider-specific tool,
+                # so preserve the historical assumption that it made progress.
+                usable_tool_call = True
+                break
+            try:
+                tool.parameters.model_validate_json(tool_call.arguments or "{}")
+            except _PydanticValidationError:
+                continue
+            usable_tool_call = True
+            break
+
+        if choice.finish_reason in ("length", "max_tokens") and not usable_tool_call:
+            self._truncation_overruns += 1
+            self._recover_from_truncation = True
+            LOGGER.warning(
+                "completion budget (%d tokens) exhausted with no usable tool call [overrun #%d]; %s",
+                capped_max,
+                self._truncation_overruns,
+                "next turn will run with thinking disabled"
+                if self._truncation_recovery
+                else "truncation_recovery is off, retrying unchanged",
+            )
+
+        return AssistantMessage(
+            reasoning=reasoning,
+            content=msg.content or "",
+            tool_calls=tool_calls,
+            token_usage=TokenUsage(
+                input=prompt_tokens,
+                answer=answer_tokens,
+                reasoning=reasoning_tokens,
+            ),
+            request_start_time=request_start_time,
+            request_end_time=request_end_time,
+        )

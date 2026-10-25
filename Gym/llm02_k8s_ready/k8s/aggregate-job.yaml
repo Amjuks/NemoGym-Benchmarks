@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: owasp-llm02-aggregate-v2
+  namespace: llm-logging
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: aggregator
+          image: REPLACE_WITH_YOUR_REGISTRY/owasp-llm02:v2
+          command: ["python", "aggregate.py"]
+          args: ["--results-dir", "/results/llm02-v2", "--shards", "8"]
+          volumeMounts:
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: results
+          persistentVolumeClaim:
+            claimName: owasp-results-pvc

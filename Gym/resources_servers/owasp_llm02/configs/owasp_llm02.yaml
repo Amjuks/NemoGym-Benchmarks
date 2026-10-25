@@ -1,0 +1,6 @@
+owasp_llm02_resources_server:
+  resources_servers:
+    owasp_llm02:
+      entrypoint: app.py
+      domain: other
+      verified: false

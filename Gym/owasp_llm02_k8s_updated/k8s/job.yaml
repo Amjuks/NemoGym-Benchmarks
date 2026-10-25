@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: owasp-llm02-eval
+  namespace: llm-logging
+spec:
+  completionMode: Indexed
+  completions: 8
+  parallelism: 4
+  backoffLimitPerIndex: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: evaluator
+          image: REPLACE_WITH_YOUR_REGISTRY/owasp-llm02:v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POLICY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm02-api-key
+                  key: api-key
+            - name: POLICY_BASE_URL
+              value: "http://172.17.99.1:31184/v1"
+            - name: POLICY_MODEL_NAME
+              value: "gpt"
+            - name: SHARD_COUNT
+              value: "8"
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              exec python run_standalone.py \
+                --input /workspace/benchmarks/owasp_llm02/data/example.jsonl \
+                --output "/results/llm02/shard-${JOB_COMPLETION_INDEX}.jsonl" \
+                --concurrency 4 --limit 0
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          volumeMounts:
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: results
+          persistentVolumeClaim:
+            claimName: owasp-results-pvc

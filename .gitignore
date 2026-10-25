@@ -1,0 +1,358 @@
+
+# Credentials / local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.kubeconfig
+kubeconfig*
+/config
+**/.secrets/
+**/secrets.local.*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.uv/
+.python-version
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs, scratch and local artifacts
+*.log
+*.tmp
+*.bak
+.cache/
+tmp/
+temp/
+logs/
+artifacts/
+outputs/
+results/
+reports/
+checkpoints/
+wandb/
+mlruns/
+*.pid
+
+# Large model artifacts
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.gguf
+
+# Data exports: avoid blanket *.jsonl / *.csv exclusions;
+# benchmark fixtures and manifests may be source-controlled intentionally.
+
+# ============================================================
+# LOGS, DATA AND GENERATED FILES
+# ============================================================
+
+*.model
+*.pkl
+*.pt
+*.log
+*.backup
+
+output
+output_2048
+outputs
+result
+work
+runs
+fastspeech_output
+nemo_experiments
+NeMo_experiments
+
+bert.pt.json
+.bash_history.local
+.hydra/
+wandb/
+
+dump.py
+run.md
+temp*
+
+slurm*.out
+slurm-attach
+slurm-logs
+
+
+# ============================================================
+# PYTHON CACHE AND COMPILED FILES
+# ============================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+**.pyc
+*.so
+
+
+# ============================================================
+# DISTRIBUTION AND PACKAGING
+# ============================================================
+
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+
+# ============================================================
+# TESTING AND COVERAGE
+# ============================================================
+
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+.hypothesis/
+.pytest_cache/
+cover/
+
+# NeMo Gym test data (directory-independent)
+**/tests/.data/
+**/tests/data/
+
+
+# ============================================================
+# PYTHON ENVIRONMENTS
+# ============================================================
+
+.env
+.venv
+.venv.setup.lock
+
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+__pypackages__/
+.pdm.toml
+
+# Dependency lockfiles are intentionally tracked
+# Pipfile.lock
+# poetry.lock
+# pdm.lock
+
+
+# ============================================================
+# SECRETS AND CREDENTIALS
+# ============================================================
+
+.env.*
+!.env.example
+!.env.sample
+
+env.yaml
+
+*.pem
+*.key
+
+credentials.json
+secrets.yaml
+secrets.yml
+
+
+# ============================================================
+# IDE AND EDITOR FILES
+# ============================================================
+
+.idea/
+.vscode/
+
+.spyderproject
+.spyproject
+.ropeproject
+
+*.sw*
+*~
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# ============================================================
+# JUPYTER AND IPYTHON
+# ============================================================
+
+.ipynb_checkpoints/
+
+profile_default/
+ipython_config.py
+
+# Notebooks are tracked by default.
+# GitHub Linguist rules belong in .gitattributes.
+
+
+# ============================================================
+# FRAMEWORK-SPECIFIC FILES
+# ============================================================
+
+# Django
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Translations
+*.mo
+*.pot
+
+# MkDocs
+site/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Cython
+cython_debug/
+
+
+# ============================================================
+# MACHINE LEARNING AND LARGE FILES
+# ============================================================
+
+cifar-10-batches-py
+*.tar.gz
+
+# NeMo Gym tutorial-generated files
+**/examples/neural_graphs/*.chkpt
+**/examples/neural_graphs/*.yml
+
+
+# ============================================================
+# NEMO GYM GENERATED OUTPUTS
+# Directory-independent patterns
+# ============================================================
+
+**/examples/*/outputs/
+**/examples/*/NeMo_experiments/
+**/examples/*/nemo_experiments/
+**/examples/*/.hydra/
+**/examples/*/wandb/
+**/examples/*/data/
+
+
+# ============================================================
+# NEMO GYM RUNTIME ARTIFACTS
+# ============================================================
+
+# Claude Code runtime
+**/.claude_node/
+
+# Agent dependencies
+**/responses_api_agents/cvdp_agent/deps/
+
+# Generated CVDP datasets
+**/resources_servers/cvdp/data/gym_agentic_code_generation_no_commercial.jsonl
+**/resources_servers/cvdp/data/gym_cvdp_nonagentic_code_generation_no_commercial.jsonl
+
+# Generated Terminal-Bench 4 dataset
+**/benchmarks/terminal_bench_4/data/
+
+
+# ============================================================
+# DATASETS
+# ============================================================
+
+# Original NeMo Gym behavior:
+# Ignore all directories named datasets, regardless of location.
+datasets/
+# Ignore raw benchmark datasets
+**/data/raw/
+
+# To track benchmark datasets in Git, comment out the
+# rule above and selectively ignore generated datasets.
+
+
+# ============================================================
+# TEMPORARY AND BACKUP FILES
+# ============================================================
+
+*.backup
+temp*
+
+# Vim
+*.sw*

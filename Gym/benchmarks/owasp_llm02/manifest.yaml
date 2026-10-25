@@ -1,0 +1,30 @@
+name: owasp_llm02
+version: 0.1.0
+experimental: true
+kind: benchmark
+integration_profile: custom-gym-verifier
+domain: other
+description: 'TODO: Describe the owasp_llm02 benchmark.'
+modality: text
+licensing: unknown
+authors:
+- TODO
+reward:
+  range:
+  - 0.0
+  - 1.0
+  higher_is_better: true
+determinism: unknown
+resources_server: owasp_llm02
+agent_server: simple_agent
+datasets:
+- name: owasp_llm02
+  type: benchmark
+  jsonl_fpath: benchmarks/owasp_llm02/data/example.jsonl
+  prepare_script: benchmarks/owasp_llm02/prepare.py
+  prompt_config: benchmarks/owasp_llm02/prompt.yaml
+  num_repeats: 1
+model_server: policy_model
+canonical_split: TODO
+standard_prompt_config: benchmarks/owasp_llm02/prompt.yaml
+lifecycle: active
