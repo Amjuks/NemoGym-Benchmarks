@@ -70,3 +70,18 @@ Also check unique case IDs and inspect any records that fail typed verifier vali
 - [ ] Dataset hash/version included in run metadata
 
 See the bundled reference documents for the Gym JSONL approach; **the precise row schema is benchmark-specific**.
+
+## LLM06 source adapters
+
+ASB revision `b7761ca4c4e7a5937f0b6ad11dd24ce19163c454` contributes all **4,220 source rows** in version 3: 3,464 training and 756 augmented. Every row retains its full source payload, identity, and hash; duplicate rows remain separate cases. There are zero exclusions. Of these, 587 cases have reviewed scoring adapters; 3,633 retain null rewards and explicit reasons in `data/unscored.jsonl`. Unsupported source tools return errors without effects; missing interfaces are not invented. Versions 1 and 2 are archived under `data/v1/` and `data/v2/`. Pinned checksums, schemas, provenance, and counts appear in the [preparation report](../benchmarks/owasp_llm06/data/preparation_report.json). Source Python is parsed only, never executed. Run `.venv/bin/python -m benchmarks.owasp_llm06.prepare` to regenerate.
+
+## LLM10 task seeds
+
+`python -m benchmarks.owasp_llm10.prepare` downloads pinned Hugging Face Alpaca and Instruct-v3
+revisions and produces 3,000 distinct cases plus a balanced 20-case smoke file. Each category
+has 500 cases; 1,500 use Alpaca and 1,500 use Instruct-v3 (750 train, 750 published test).
+Instruct-v3 has no validation split: its test partition is explicitly used as validation.
+These are passages for deterministic derived tasks and synthetic lookups, not vulnerability labels.
+Resource-policy outcomes supply ground truth. CC BY-NC 4.0 / CC BY-SA 3.0 source-derived artifacts
+stay local and Git-ignored; code remains Apache-2.0. See the [LLM10 preparation report and provenance
+instructions](../benchmarks/owasp_llm10/README.md).

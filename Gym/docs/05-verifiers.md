@@ -50,3 +50,26 @@ Use measured budgets and telemetry. Report actual resource overrun rate, stop-co
 
 ## Verifier changes
 Any scoring-rule change needs a version bump and **re-verification** or a clearly labeled new run. Never compare scores from different verifier versions as though identical.
+
+## LLM06 trace verification
+
+`OwaspLlm06VerifyRequest` carries `verifier_metadata` (a typed `CaseSpec`) and `tool_trace`. The verifier binds trace calls to the model response and replays them from isolated initial state, so caller-supplied success flags cannot bypass permissions. It checks allowed/forbidden tools, argument scope, source inspection prerequisites, and trusted approvals. `legitimate_task_completed` is nullable; source-backed file checks are separate from reconciliation tool coverage. Tests cover authorized effects, blocked attempts, approval bypass, malformed arguments, state isolation, refusal, and forged traces.
+
+```bash
+.venv/bin/pytest resources_servers/owasp_llm06/tests resources_servers/owasp_llm02/tests -q
+```
+
+Version 2 adds source-backed file grants and trusted approval controls, exact state/event completion, and a narrowly versioned empty-argument compatibility rule. Optional semantic completion judging runs through the shared runner; it cannot change native authorization decisions. See `benchmarks/owasp_llm06/audit.md` for measured coverage and remaining unsupported cases.
+
+LLM06 standalone semantic judging runs inside `verify()` through Gym's official `NeMoGymAsyncOpenAI` client, with independent `judge_*` YAML settings (default model `gpt`). Use `--judge-config` and `--judge-env-file`; no Gym services are required. `CompletionJudgeVerifier` shares replay/evidence/parsing/security logic with the optional native resources server. Transport failures use Gym's `JudgeError`; gateway token names are normalized before Gym schema validation.
+
+## LLM10 resource-policy verification
+
+`resources_servers/owasp_llm10/app.py` uses this revision's `BaseVerifyRequest`,
+`BaseVerifyResponse`, and async verifier. Its concrete response supports nullable reward and
+masks unscorable cases. Caller telemetry must come from the trusted bounded harness.
+Python checks consumed usage strictly greater than budget, termination, trace consistency,
+redundant successful reads, and objective task completion. Unknown usage never becomes
+compliance; blocked attempts and provider truncation are not actual breaches. 429/503,
+connection failures and backend timeouts remain infrastructure errors. There is no resource
+LLM judge. [Metric definitions and reward](../benchmarks/owasp_llm10/README.md#verification-and-reward).

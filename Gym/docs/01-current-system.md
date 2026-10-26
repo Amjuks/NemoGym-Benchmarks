@@ -16,7 +16,7 @@
 ## Not yet verified or implemented
 - Native Gym end-to-end execution replacing the standalone runner.
 - Fully implemented standardized Markdown/HTML/JSON reporting layer.
-- LLM06 and LLM10 benchmark/verifier implementations.
+- LLM10 full Kubernetes evaluation (the benchmark and bounded runner are implemented; see below).
 - Central `results/llmXX/model/run-id/` convention in all jobs.
 - Exact current contents of remote scripts, Kubernetes manifests and verifier request/response schemas.
 
@@ -36,3 +36,15 @@ python run_standalone.py --help
 python aggregate.py --help
 find benchmarks/owasp_llm02 resources_servers/owasp_llm02 k8s -maxdepth 3 -type f
 ```
+
+## LLM06 implementation
+
+`benchmarks/owasp_llm06/` contains all 4,220 version 3 ASB source rows, including 587 cases with reviewed scoring adapters and 3,633 explicitly unscorable cases; prior versions are archived, with separate scoring and coverage smoke inputs. `resources_servers/owasp_llm06/` provides a native Gym trace verifier and an in-memory tool loop. `run_standalone.py --risk llm06` verifies model tool support before evaluation; `aggregate.py --risk llm06` produces JSON and Markdown. Reconciliation task completion defaults to inspection coverage; an optional judge can evaluate justified outcomes without changing safety checks. [Scope and commands](../benchmarks/owasp_llm06/README.md).
+
+## LLM10 implementation
+
+LLM10 now has 3,000 deterministic resource-policy cases (500 per scenario), source preparation,
+a typed Gym verifier, and model-driven bounded mock-tool execution. Shared runner/aggregation
+support `--risk llm10`; results use `results/llm10/<model>/<run-id>/` with JSON and Markdown.
+The manifest `k8s/llm10-job.yaml` generates unique run IDs and is launched manually.
+[Source restrictions, measurement limits and commands](../benchmarks/owasp_llm10/README.md).

@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Use kubectl create: the generated Job name is the shared, unique run ID.
+  generateName: aman-owasp-llm10-
+  namespace: aman-owasp-bench
+  labels:
+    app: owasp-llm10
+spec:
+  completionMode: Indexed
+  completions: 8
+  parallelism: 2
+  backoffLimit: 4
+  activeDeadlineSeconds: 86400
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: owasp-llm10
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: soketlab-worker001
+      containers:
+        - name: evaluator
+          image: python:3.13-slim
+          workingDir: /pipeline
+          env:
+            - name: POLICY_BASE_URL
+              value: http://litellm-proxy.llm-logging.svc.cluster.local:4000/v1
+            - name: POLICY_MODEL_NAME
+              value: sarvam-30b
+            - name: POLICY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aman-owasp-api-keys
+                  key: policy-api-key
+            - name: SHARD_COUNT
+              value: "8"
+            - name: RUN_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['batch.kubernetes.io/job-name']
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              python - <<'PY'
+              import os
+              from pathlib import Path
+              owner = Path('/pipeline').stat()
+              run = Path('/pipeline/results/llm10/sarvam-30b') / os.environ['RUN_ID']
+              for directory in (run.parent.parent, run.parent, run, run / 'shards'):
+                  directory.mkdir(parents=True, exist_ok=True)
+                  os.chown(directory, owner.st_uid, owner.st_gid)
+              PY
+              pip install -q -e . 'jsonschema>=4.23'
+              python run_standalone.py \
+                --risk llm10 --model sarvam-30b --run-id "${RUN_ID}" \
+                --input benchmarks/owasp_llm10/data/prepared.jsonl \
+                --output "/pipeline/results/llm10/sarvam-30b/${RUN_ID}/shards/shard-${JOB_COMPLETION_INDEX}.jsonl" \
+                --shard-index "${JOB_COMPLETION_INDEX}" --shard-count 8 \
+                --concurrency 2 --timeout 60 --retries 0 --max-output-tokens 512
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: pipeline-code
+              mountPath: /pipeline
+      volumes:
+        - name: pipeline-code
+          hostPath:
+            path: /home/aman/nemo_gym/Gym
+            type: Directory

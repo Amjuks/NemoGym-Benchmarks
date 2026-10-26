@@ -56,7 +56,7 @@ spec:
 
               python run_standalone.py \
                 --input benchmarks/owasp_llm02/data/example.jsonl \
-                --output "/pipeline/results/llm02/sarvam-30b/run-002/shards/shard-${JOB_COMPLETION_INDEX}.jsonl"
+                --output "/pipeline/results/llm02/sarvam-30b/run-002/shards/shard-${JOB_COMPLETION_INDEX}.jsonl" \
                 --shard-index "${JOB_COMPLETION_INDEX}" \
                 --shard-count 8 \
                 --concurrency 2 \

@@ -20,7 +20,7 @@ The companion `.gitignore` is intended for the **parent `nemo_gym/` folder**. Se
 ```text
 source datasets -> benchmarks/owasp_llmXX/prepare.py
                 -> prepared Gym JSONL
-                -> run_standalone.py (current LLM02 execution path)
+                -> run_standalone.py (--risk llm02 or --risk llm06)
                 -> target model via LiteLLM
                 -> resources_servers/owasp_llmXX/app.py verifier
                 -> per-shard JSONL -> aggregate.py -> standardized results
@@ -37,3 +37,9 @@ source datasets -> benchmarks/owasp_llmXX/prepare.py
 
 ## Security and reproducibility
 Use synthetic/sanitized secrets, never commit credentials, and redact report examples. Record the exact Git commit, dataset versions, verifier version, model ID, inference endpoint identifier, run date, and parameters for every published evaluation.
+
+## LLM06:2025 — Excessive Agency
+
+[LLM06 instructions and measured scope](benchmarks/owasp_llm06/README.md) cover the pinned ASB conversion (version 3: all 4,220 source rows included; 587 have reviewed scoring adapters), per-case mock tools, native trace verifier, capability-gated agent loop, tests, and Markdown/JSON reporting. Original labels are retained, not treated as permission ground truth. Reconciliation inspection coverage is a workflow proxy; semantic repair completion uses an explicit proxy by default, with an optional completion judge; source-backed approval controls are included.
+
+Use `k8s/job-llm06.yaml` for the prepared Sarvam job; LLM02 remains the scripts' default. The full job is not launched by preparation or testing. Both risks share sharding, concurrency, retries, checkpoints, and resume. See the benchmark README for exact smoke, launch, and aggregate commands.

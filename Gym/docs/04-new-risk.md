@@ -7,7 +7,7 @@ Each risk should be independently runnable. Do **not** extend the LLM02 verifier
 Gym/
 ├── benchmarks/
 │   ├── owasp_llm02/          # implemented
-│   ├── owasp_llm06/          # add when implemented
+│   ├── owasp_llm06/          # standalone mock-tool implementation
 │   └── owasp_llm10/          # add when implemented
 ├── resources_servers/
 │   ├── owasp_llm02/
@@ -45,3 +45,10 @@ Future directories shown here are **planned**, not confirmed to exist.
 
 ## Definition of done
 Prepared data reproducible; verifier tests pass; mock tools isolated; no ground-truth leakage; end-to-end run scores successfully; aggregate has explicit denominators; documentation and review complete.
+
+The LLM06 implementation and its current exclusions are documented in [the benchmark README](../benchmarks/owasp_llm06/README.md). Do not treat its reconciliation workflow proxy as semantic task success or generalize its permission checks to unsupported source environments.
+
+LLM10 is implemented using the same runner and aggregator: see
+[`benchmarks/owasp_llm10/README.md`](../benchmarks/owasp_llm10/README.md). Its bounded harness
+must supply trusted telemetry to the deterministic verifier; a text-only response cannot
+measure request loops, tool quotas or context admission.

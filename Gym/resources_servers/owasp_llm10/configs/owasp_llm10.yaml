@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+owasp_llm10_resources_server:
+  resources_servers:
+    owasp_llm10:
+      entrypoint: app.py
+      domain: other
+      verified: false

@@ -1,0 +1,183 @@
+{
+  "seed": 20251010,
+  "requested_cases": 3000,
+  "sources": {
+    "tatsu-lab/alpaca": {
+      "revision": "dce01c9b08f87459cf36a430d809084718273017",
+      "requested_revision": "dce01c9b08f87459cf36a430d809084718273017",
+      "license": "cc-by-nc-4.0",
+      "url": "https://huggingface.co/datasets/tatsu-lab/alpaca",
+      "splits": {
+        "train": {
+          "source_rows": 52002,
+          "valid_unique": 51835,
+          "excluded": {
+            "unsuitable": 139,
+            "empty": 28
+          },
+          "logical_split": "train"
+        }
+      },
+      "card_sha256": "dc8a8ca43cce3671167721372bbd8b345b24eba1af5954915161fffed2f21b5c"
+    },
+    "mosaicml/instruct-v3": {
+      "revision": "d53c69fd0fa37d65a232811cec0a990c1ec3ec8f",
+      "requested_revision": "d53c69fd0fa37d65a232811cec0a990c1ec3ec8f",
+      "license": "cc-by-sa-3.0",
+      "url": "https://huggingface.co/datasets/mosaicml/instruct-v3",
+      "splits": {
+        "train": {
+          "source_rows": 56167,
+          "valid_unique": 48213,
+          "excluded": {
+            "length": 5823,
+            "unsuitable": 1769,
+            "duplicate_prompt": 362
+          },
+          "logical_split": "train"
+        },
+        "test": {
+          "source_rows": 6807,
+          "valid_unique": 6123,
+          "excluded": {
+            "length": 440,
+            "unsuitable": 167,
+            "duplicate_prompt": 77
+          },
+          "logical_split": "validation"
+        }
+      },
+      "card_sha256": "89f24eef37014f34a571db54726eb025299584cec08f716dd161c14278b85eaf"
+    }
+  },
+  "warnings": [
+    "Instruct-v3 has no validation split: published test is used as validation; source_split remains test."
+  ],
+  "license_notice": "Generated/source artifacts retain CC BY-NC 4.0 and CC BY-SA 3.0 terms; not Apache-2.0 data.",
+  "generated": {
+    "cases": 3000,
+    "by_dataset": {
+      "tatsu-lab/alpaca": 1500,
+      "mosaicml/instruct-v3": 1500
+    },
+    "by_scenario": {
+      "output_budget": 500,
+      "context_limit": 500,
+      "repetition_loop": 500,
+      "tool_call_budget": 500,
+      "request_budget": 500,
+      "normal_control": 500
+    },
+    "by_source_split": {
+      "tatsu-lab/alpaca:train": 1500,
+      "mosaicml/instruct-v3:train": 750,
+      "mosaicml/instruct-v3:test": 750
+    },
+    "by_task_type": {
+      "word_count": 252,
+      "synthetic_lookup": 1500,
+      "extract_first": 252,
+      "extract_last": 252,
+      "character_count": 252,
+      "line_count": 249,
+      "letter_count": 243
+    },
+    "by_diversity_bucket": {
+      "alpaca/long/calculate": 1,
+      "competition_math/long/write": 85,
+      "alpaca/long/classif": 3,
+      "alpaca/long/explain": 3,
+      "competition_math/medium/write": 215,
+      "alpaca/long/list": 3,
+      "alpaca/long/other": 26,
+      "competition_math/short/write": 102,
+      "alpaca/long/question": 1,
+      "alpaca/long/summar": 36,
+      "cot_gsm8k/long/write": 102,
+      "alpaca/long/write": 1,
+      "alpaca/medium/calculate": 11,
+      "dialogsum/long/write": 83,
+      "alpaca/medium/classif": 69,
+      "alpaca/medium/code": 20,
+      "dialogsum/medium/write": 45,
+      "alpaca/medium/explain": 50,
+      "alpaca/medium/list": 77,
+      "dolly_hhrlhf/long/write": 132,
+      "alpaca/medium/other": 483,
+      "alpaca/medium/question": 35,
+      "dolly_hhrlhf/medium/write": 148,
+      "alpaca/medium/summar": 76,
+      "alpaca/medium/write": 55,
+      "dolly_hhrlhf/short/write": 102,
+      "alpaca/short/calculate": 55,
+      "alpaca/short/classif": 55,
+      "duorc/long/write": 101,
+      "alpaca/short/code": 55,
+      "alpaca/short/explain": 55,
+      "duorc/medium/write": 17,
+      "alpaca/short/list": 55,
+      "spider/medium/write": 316,
+      "alpaca/short/other": 55,
+      "spider/long/write": 2,
+      "alpaca/short/question": 55,
+      "alpaca/short/summar": 55,
+      "alpaca/short/translat": 55,
+      "spider/short/write": 15,
+      "alpaca/short/write": 55,
+      "scrolls/summ_screen_fd/long/write": 8,
+      "qasper/long/write": 20,
+      "quality/long/write": 7
+    },
+    "expected_admission_rejections": 292
+  },
+  "smoke": {
+    "cases": 20,
+    "by_dataset": {
+      "tatsu-lab/alpaca": 10,
+      "mosaicml/instruct-v3": 10
+    },
+    "by_scenario": {
+      "output_budget": 4,
+      "context_limit": 4,
+      "repetition_loop": 3,
+      "tool_call_budget": 3,
+      "request_budget": 3,
+      "normal_control": 3
+    },
+    "by_source_split": {
+      "tatsu-lab/alpaca:train": 10,
+      "mosaicml/instruct-v3:test": 6,
+      "mosaicml/instruct-v3:train": 4
+    },
+    "by_task_type": {
+      "word_count": 2,
+      "character_count": 2,
+      "letter_count": 2,
+      "extract_last": 1,
+      "line_count": 3,
+      "synthetic_lookup": 9,
+      "extract_first": 1
+    },
+    "by_diversity_bucket": {
+      "alpaca/long/calculate": 1,
+      "competition_math/short/write": 1,
+      "alpaca/short/classif": 1,
+      "dialogsum/long/write": 1,
+      "spider/medium/write": 3,
+      "alpaca/medium/write": 1,
+      "qasper/long/write": 1,
+      "alpaca/short/translat": 1,
+      "alpaca/long/summar": 2,
+      "dolly_hhrlhf/medium/write": 1,
+      "alpaca/short/question": 1,
+      "alpaca/medium/code": 1,
+      "competition_math/medium/write": 1,
+      "alpaca/medium/classif": 2,
+      "cot_gsm8k/long/write": 1,
+      "dolly_hhrlhf/long/write": 1
+    },
+    "expected_admission_rejections": 2
+  },
+  "prepared_sha256": "ccffa5c38f24d711dbfcc9bcec7eb157dba213d589b9e22bd4b64163cd7dcb94",
+  "selection": "Seeded round-robin source/length/task-keyword strata; one distinct deduplicated prompt per case. Original tasks are passages for deterministic derived tasks; source responses are not vulnerability labels."
+}

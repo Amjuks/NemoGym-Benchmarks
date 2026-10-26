@@ -1,0 +1,101 @@
+{
+  "benchmark_version": "3",
+  "revision": "b7761ca4c4e7a5937f0b6ad11dd24ce19163c454",
+  "repository": "aradhye/agent-safety-bench",
+  "license": "Apache-2.0",
+  "accepted": 4220,
+  "smoke": 10,
+  "counts": {
+    "augmented.accepted": 756,
+    "augmented.scorable": 546,
+    "augmented.seen": 756,
+    "augmented.unscorable": 210,
+    "augmented.unscored.invalid_source_python": 3,
+    "augmented.unscored.no_source_inspection_or_conditional_action": 11,
+    "augmented.unscored.unsupported_append": 13,
+    "augmented.unscored.unsupported_append_key": 4,
+    "augmented.unscored.unsupported_append_record": 1,
+    "augmented.unscored.unsupported_assignment": 3,
+    "augmented.unscored.unsupported_assignment_expression": 2,
+    "augmented.unscored.unsupported_effect": 4,
+    "augmented.unscored.unsupported_lookup_projection": 18,
+    "augmented.unscored.unsupported_lookup_return": 4,
+    "augmented.unscored.unsupported_merge_schema": 1,
+    "augmented.unscored.unsupported_method_control_flow": 51,
+    "augmented.unscored.unsupported_method_statements": 1,
+    "augmented.unscored.unsupported_record_guard": 61,
+    "augmented.unscored.unsupported_record_loop": 5,
+    "augmented.unscored.unsupported_state": 12,
+    "augmented.unscored.unsupported_tool_semantics": 16,
+    "train.accepted": 3464,
+    "train.scorable": 41,
+    "train.seen": 3464,
+    "train.unscorable": 3423,
+    "train.unscored.invalid_source_json": 1,
+    "train.unscored.no_reviewed_training_adapter": 3420,
+    "train.unscored.unsupported_file_state": 2
+  },
+  "source_files": {
+    "train": {
+      "sha256": "50adad57aabf45f96c8ebb1b991fbd187c764d6bbd08aca0bb3753873e066855",
+      "bytes": 785625
+    },
+    "augmented": {
+      "sha256": "bfcb9bec3c6ff3e2537862dcacd04114ae11eba934a768e6f43b178a6f4fc4d0",
+      "bytes": 350047
+    }
+  },
+  "inspection": {
+    "train": {
+      "rows": 3464,
+      "schema": "id: int64\ninstruction: string\nrisks: list<element: string>\n  child 0, element: string\nfailure_modes: string\nfulfillable: int64\ngt_label: string\nenv_names: list<element: string>\n  child 0, element: string\ngt_tools: list<element: string>\n  child 0, element: string\nenvironments: string\ndialog: string"
+    },
+    "augmented": {
+      "rows": 756,
+      "schema": "instruction: string\npython_codes: string\nparameters: string\ntool_descs: string"
+    }
+  },
+  "coverage": {
+    "source_rows": 4220,
+    "accepted_unique_cases": 4220,
+    "accepted_fraction": 1.0,
+    "excluded_rows": 0,
+    "scorable_cases": 587,
+    "unscorable_cases": 3633,
+    "source_duplicates_retained": 29,
+    "advertised_tools": 25079,
+    "implemented_tools": 4594,
+    "cases_without_tool_schema": 826,
+    "by_scenario": {
+      "source_coverage": 3633,
+      "file_read_scope": 35,
+      "file_permission_scope": 2,
+      "access_approval": 2,
+      "prescription_approval": 2,
+      "conditional_reconciliation": 546
+    },
+    "by_completion_kind": {
+      "unavailable": 3633,
+      "exact_output": 29,
+      "exact_events": 2,
+      "exact_state": 1,
+      "workflow_proxy": 552,
+      "approval_request": 3
+    },
+    "approval_required_cases": 4,
+    "source_schema_recovered_cases": 2412
+  },
+  "limitations": [
+    "All source rows are retained, including duplicates and rows outside reviewed adapters.",
+    "Rows without reviewed permission/completion adapters run with null rewards, never fabricated safety labels.",
+    "Unsupported source tools return explicit errors without changing state; missing schemas are not invented.",
+    "The original source row is preserved verbatim as JSON data and is not sent wholesale to the model.",
+    "Reconciliation completion measures inspection workflow coverage only, not repair correctness.",
+    "Original safe/unsafe and fulfillable labels are preserved, never used as permissions.",
+    "Python source is parsed into a restricted declarative tool representation, never executed.",
+    "Approval requirements and grants come only from trusted pending-request and prescription state.",
+    "Missing tool schemas may be recovered from an unambiguous same-environment source schema; donor IDs are preserved.",
+    "The empty-object wrapper normalization is explicit and versioned; other malformed arguments remain errors.",
+    "Unnecessary sensitive actions and full semantic task completion are unavailable for reconciliation."
+  ]
+}

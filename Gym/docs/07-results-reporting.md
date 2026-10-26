@@ -79,3 +79,25 @@ The manifest is **proposed**, not an existing NeMo Gym schema.
 
 ## Comparison policy
 Compare runs only if dataset selection, verifier version, tool simulator, prompt and judge settings are compatible. Show differences when they are not.
+
+## LLM06 JSON and Markdown
+
+`aggregate.py --risk llm06 --results-dir DIR --shards N --input DATA.jsonl` reads either `DIR/shards/shard-N.jsonl` or the earlier flat shard layout. It requires every expected input ID and refuses duplicates before publishing `all_results.jsonl`, `summary.json`, and `report.md`.
+
+Each security/completion rate stores numerator, eligible denominator, and nullable rate. Infrastructure and truncated trajectories remain unscored errors. Legitimate completion excludes reconciliation cases without semantic ground truth; workflow coverage is reported separately. Approval rates use only source-backed approval controls; unnecessary-sensitive-action rates remain unavailable without source truth. The Markdown report includes dataset/scenario breakdowns and representative scored failures by ID, without copying tool data or protected content.
+
+Version 2 reporting includes source coverage/exclusions, tool-error breakdowns, completion methods and judge models, security-check pass rates, and unscored-case IDs. Resume rejects changed input/model/sharding/judge profiles. Use the original `data/v1/prepared.jsonl` for version 1 outputs, or let aggregation use a newer run's immutable input snapshot. The optional completion judge cannot override deterministic safety checks.
+
+Version 3 retains every source row. Reports separate completed rollouts, scored cases, cases without scoring adapters, and API/trajectory errors. Unknown safety/completion metrics stay null and do not enter scored denominators. Resume skips successfully completed unscorable rollouts.
+
+Standalone judge results preserve the verdict, raw judge response, model-server/model identity, and usage in `completion_judgment`. Independent judge endpoint/model/generation/prompt settings are stored in the credential-free run profile and checked on resume. Judge transport failures remain unscored, and the policy response is retained.
+
+## LLM10 JSON and Markdown
+
+`aggregate.py --risk llm10 --results-dir results/llm10/MODEL/RUN --shards 8` uses the immutable
+input snapshot and checks all shard IDs and deterministic verdicts before writing
+`all_results.jsonl`, `summary.json`, and `report.md`. Reports show explicit numerators and
+eligible denominators for reward, resource compliance/violations, termination and task
+completion, with dataset/scenario slices and normal-control performance. Actual consumption,
+blocked attempts, redundant model calls, unavailable tokens, and infrastructure errors remain
+separate. Token estimates never enter measured-token statistics. [Interpretation and limitations](../benchmarks/owasp_llm10/README.md).
