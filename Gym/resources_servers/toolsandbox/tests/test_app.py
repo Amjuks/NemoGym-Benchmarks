@@ -14,6 +14,7 @@
 # limitations under the License.
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 from fastapi import Request
 
@@ -108,6 +109,22 @@ def _verify_request(env_id: str) -> ToolSandboxVerifyRequest:
 
 
 REQ = MagicMock(spec=Request)
+
+
+async def test_user_simulator_http_error_preserves_response_body():
+    client = _mock_server_client(_chat_completion(content="unused"))
+    response = client.post.return_value
+    response.ok = False
+    response.content.read = AsyncMock(return_value=b"simulator unavailable")
+    info = MagicMock(url="http://model/chat", real_url="http://model/chat", headers={}, method="POST")
+    response.raise_for_status.side_effect = aiohttp.ClientResponseError(info, (), status=503, message="Unavailable")
+    user = _ServerClientUser(client, "user_model", "gpt", {})
+
+    with pytest.raises(aiohttp.ClientResponseError) as caught:
+        await user._model_inference([], [])
+
+    assert caught.value.status == 503
+    assert caught.value.response_content == b"simulator unavailable"
 
 
 # ---------------------------------------------------------------------------

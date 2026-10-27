@@ -5,11 +5,12 @@
 import asyncio
 from pathlib import Path
 
+from aiohttp import ClientResponseError
 from omegaconf import OmegaConf
 from pydantic import BaseModel, Field, SecretStr
 
 from benchmarks.response_utils import normalize_usage
-from nemo_gym.judge import reraise_judge_errors
+from nemo_gym.judge import JudgeError, reraise_judge_errors
 from nemo_gym.openai_utils import NeMoGymAsyncOpenAI, NeMoGymResponse, NeMoGymResponseCreateParamsNonStreaming
 from resources_servers.owasp_llm06.app import CompletionJudgeConfig, CompletionJudgeVerifier
 
@@ -70,7 +71,24 @@ class StandaloneVerifier(CompletionJudgeVerifier):
         async def request() -> NeMoGymResponse:
             payload = params.model_dump(exclude_unset=True)
             payload.update(model=self.endpoint.openai_model, store=False, stream=False)
-            raw = await self.client.create_response(**payload)
+            for attempt in range(self.endpoint.max_http_attempts):
+                try:
+                    raw = await self.client.create_response(**payload)
+                    break
+                except ClientResponseError as exc:
+                    content = getattr(exc, "response_content", b"")
+                    detail = content.decode("utf-8", errors="replace") if isinstance(content, bytes) else str(content)
+                    # The gateway intermittently rejects its upstream header, even for identical requests.
+                    # Other 400 responses are permanent request errors and must not be retried here.
+                    transient_header = exc.status == 400 and "could not decode header" in detail.lower()
+                    if transient_header and attempt + 1 < self.endpoint.max_http_attempts:
+                        await asyncio.sleep(min(2**attempt, 4))
+                        continue
+                    # Never persist request headers or credentials echoed by a provider.
+                    detail = (detail or exc.message).replace(
+                        self.endpoint.openai_api_key.get_secret_value(), "[REDACTED]"
+                    )
+                    raise JudgeError(f"HTTP {exc.status}: {detail[:8000]}") from exc
             # This gateway returns Chat-style token names even on /responses.
             # Normalize the envelope before validating Gym's Responses schema.
             return NeMoGymResponse.model_validate(normalize_usage(raw))

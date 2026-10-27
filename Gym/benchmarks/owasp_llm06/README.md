@@ -146,3 +146,63 @@ The original version 1 unscored case was recovered separately in `run-001-recove
 A job that reaches `Failed` must be inspected and recreated; applying the same manifest does not restart it. Connect waiting and aggregation with `&&` so an interrupted wait does not trigger premature aggregation.
 
 LLM02 remains the scripts' default. Its verifier and data are unchanged. The supported agentic path is the standalone runner; the native resources server supplies verification. No claim is made that Gym's `simple_agent` executes these in-process tools.
+
+## Recovery after reviewing run 004
+
+Recover supported-case errors into a **separate** directory. Judge errors reuse the saved
+policy response and tool trace; only rollout errors call the policy model again. Completed
+recovery attempts are checkpointed. Failed attempts require `--retry-errors` to retry.
+
+```bash
+.venv/bin/python -m benchmarks.owasp_llm06.recover \
+  --source results/llm06/sarvam-30b/run-004-gpt-judge \
+  --output results/llm06/sarvam-30b/run-004-recovery-001 \
+  --env-file env.yaml
+```
+
+The independent judge still uses its Gym YAML configuration and `judge_*` credentials.
+Recovery defaults to 8,192 policy output tokens and 20 turns for the two supported rollout
+failures; these differ from the original 4,096/12 budget. The manifest, per-case recovery
+metadata and aggregate report disclose the overlay. Original successful cases are retained.
+Source shard hashes and input hash guard recovery resume. Use a fresh output directory if
+changing judge settings or retry budgets.
+
+Judge HTTP error bodies are retained with the configured judge key redacted. The observed
+HTTP 400 `could not decode header` error is retried with bounded backoff, using
+`max_http_attempts` from the judge endpoint configuration. Other HTTP 400 errors fail
+immediately with their provider detail. This handles the observed transient rejection;
+it does not modify the shared inference service.
+
+Reports preserve historical rewards and add `completion_evidence_success_rate`: reward 1
+**and** established legitimate task completion, divided by all scored cases. Unknown judge
+verdicts earn no positive credit in this separate metric. `workflow_only_positive_cases`
+identifies positives supported only by workflow checks. Neither metric is a full-dataset
+safety rate. Source-backed refusal controls may have different completion semantics.
+
+```bash
+.venv/bin/python -m benchmarks.owasp_llm06.audit_coverage \
+  --source results/llm06/sarvam-30b/run-004-gpt-judge \
+  --output results/llm06/sarvam-30b/run-004-review-fixes/coverage-audit.json
+```
+
+This creates a source-linked adapter backlog and a list of unknown judge verdicts and
+reasons. It does not turn source `safe`/`unsafe` labels into permission ground truth.
+
+## Version 4 compound record selectors
+
+Version 4 adds restricted static compilation of conjunctive equality selectors, such as
+matching both `sale_id` and `item_id`. Every declared field must match before a read or
+mutation. Disjunctions and unsupported expressions remain rejected. Source Python is
+parsed, never executed. This adds eight reviewed workflow adapters: **595 of 4,220** rows
+are scorable; **3,625** still lack scoring adapters. Full source-row inclusion is unchanged.
+
+Generate version 4 separately to preserve the version 3 benchmark and results:
+
+```bash
+.venv/bin/python -m benchmarks.owasp_llm06.prepare --version 4 \
+  --output-dir results/llm06/sarvam-30b/run-004-review-fixes/data-v4
+```
+
+Version 3 remains the preparation default. Use the new input path and a new run directory
+for subsequent evaluation; never combine version 3 and version 4 results. Additional
+source-backed adapters and completion oracles are still required for comprehensive scoring.

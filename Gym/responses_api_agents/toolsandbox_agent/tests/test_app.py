@@ -24,6 +24,7 @@ exercised without any live server.
 from typing import Any, Callable
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 from pytest import fixture, mark, raises
 from tenacity import RetryError, wait_none
 
@@ -48,6 +49,7 @@ class _FakeResp:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
         self.cookies: dict[str, str] = {}
+        self.ok = True
 
     def raise_for_status(self) -> None:
         return None
@@ -224,6 +226,42 @@ class TestApp:
 
         # The session is always closed exactly once.
         assert len(self._calls_to(agent, "/close")) == 1
+
+    @mark.parametrize("failed_endpoint", ["/v1/responses", "/step"])
+    async def test_http_failure_is_retryable_and_closes_session(
+        self, agent_config: ToolSandboxAgentConfig, failed_endpoint: str
+    ) -> None:
+        post = _post_router(
+            {
+                "/seed_session": [_seed_payload()],
+                "/v1/responses": [_text_response("Continue.")],
+                "/step": [_step_payload(done=False)],
+                "/close": [{"message": "closed", "success": True}],
+            }
+        )
+        info = MagicMock(url="http://upstream/run", real_url="http://upstream/run", headers={}, method="POST")
+        error = aiohttp.ClientResponseError(info, (), status=503, message="Unavailable")
+        failed_response = MagicMock(ok=False)
+        failed_response.content.read = AsyncMock(return_value=b"upstream unavailable")
+        failed_response.raise_for_status.side_effect = error
+        calls = 0
+
+        async def fail_second_call(**kwargs):
+            nonlocal calls
+            if kwargs["url_path"] == failed_endpoint:
+                calls += 1
+                if calls == 2:
+                    return failed_response
+            return await post(**kwargs)
+
+        agent = self._make_agent(agent_config, fail_second_call)
+        with raises(aiohttp.ClientResponseError) as caught:
+            await agent.run(self._run_request())
+
+        assert caught.value.status == 503
+        assert caught.value.response_content == b"upstream unavailable"
+        assert len(self._calls_to(agent, "/close")) == 1
+        assert self._calls_to(agent, "/verify") == []
 
     async def test_responses_tool_call_turn(self, agent_config: ToolSandboxAgentConfig) -> None:
         post = _post_router(

@@ -159,6 +159,26 @@ def test_errors_not_security_violations() -> None:
     assert "Unavailable" in markdown(summary, records)
 
 
+def test_aggregate_preserves_unicode_separators_inside_json_strings(tmp_path: Path) -> None:
+    row = json.loads((ROOT / "benchmarks/owasp_llm06/data/smoke.jsonl").read_text().split("\n")[0])
+    row["responses_create_params"]["input"][1]["content"] += "\u2028task\u2029text"
+    source = tmp_path / "dataset.jsonl"
+    source.write_text(json.dumps(row, ensure_ascii=False) + "\n")
+    result = {
+        "case_id": row["case_id"],
+        "model": "mock",
+        "benchmark_version": row["benchmark_version"],
+        "reward": None,
+        "error": "Example error",
+        "model_response": "first\u2028second\u2029third\u0085fourth",
+    }
+    (tmp_path / "shard-0.jsonl").write_text(json.dumps(result, ensure_ascii=False) + "\n")
+    report = aggregate(tmp_path, shards=1, risk="llm06", input_path=source)
+    assert report["overall"]["total"] == 1 and report["overall"]["errors"] == 1
+    saved = json.loads((tmp_path / "all_results.jsonl").read_text())
+    assert saved["model_response"] == result["model_response"]
+
+
 def test_truncation_preserves_previous_tool_attempts() -> None:
     from resources_servers.owasp_llm06.agent import RolloutError, rollout
 

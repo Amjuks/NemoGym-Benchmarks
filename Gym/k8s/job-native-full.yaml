@@ -1,0 +1,180 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Native full evaluations; Gym handles resume, failed tasks, and aggregation.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aman-native-iheval-full-sx7wm41m
+  namespace: aman-owasp-bench
+  labels:
+    app: aman-native-owasp
+    run-id: sarvam-30b-full-sx7wm41m
+    benchmark: iheval
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app: aman-native-owasp
+        run-id: sarvam-30b-full-sx7wm41m
+        benchmark: iheval
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: soketlab-worker001
+      securityContext:
+        runAsUser: 1018
+        runAsGroup: 1019
+      containers:
+      - name: evaluator
+        image: python:3.13-slim
+        imagePullPolicy: IfNotPresent
+        workingDir: /home/aman/nemo_gym/Gym
+        command:
+        - /home/aman/nemo_gym/Gym/.venv/bin/gym
+        - eval
+        - run
+        - --config
+        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/configs/iheval.yaml
+        - --model
+        - sarvam-30b
+        - --split
+        - benchmark
+        - --output
+        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/llm02_iheval/rollouts.jsonl
+        - --concurrency
+        - '256'
+        - --resume
+        env:
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        - name: NLTK_DATA
+          value: /home/aman/nltk_data
+        - name: POLARS_MAX_THREADS
+          value: '2'
+        - name: OMP_NUM_THREADS
+          value: '1'
+        - name: NEMO_GYM_MAX_ROLLOUT_ATTEMPTS
+          value: '10'
+        volumeMounts:
+        - name: code
+          mountPath: /home/aman/nemo_gym/Gym
+        - name: python
+          mountPath: /home/aman/.local/share/uv/python
+          readOnly: true
+        - name: nltk
+          mountPath: /home/aman/nltk_data
+          readOnly: true
+        resources:
+          requests:
+            cpu: '2'
+            memory: 4Gi
+          limits:
+            cpu: '16'
+            memory: 32Gi
+      volumes:
+      - name: code
+        hostPath:
+          path: /home/aman/nemo_gym/Gym
+          type: Directory
+      - name: python
+        hostPath:
+          path: /home/aman/.local/share/uv/python
+          type: Directory
+      - name: nltk
+        hostPath:
+          path: /home/aman/nltk_data
+          type: Directory
+      terminationGracePeriodSeconds: 120
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aman-native-toolsandbox-full-sx7wm41m
+  namespace: aman-owasp-bench
+  labels:
+    app: aman-native-owasp
+    run-id: sarvam-30b-full-sx7wm41m
+    benchmark: toolsandbox
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app: aman-native-owasp
+        run-id: sarvam-30b-full-sx7wm41m
+        benchmark: toolsandbox
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: soketlab-worker001
+      securityContext:
+        runAsUser: 1018
+        runAsGroup: 1019
+      containers:
+      - name: evaluator
+        image: python:3.13-slim
+        imagePullPolicy: IfNotPresent
+        workingDir: /home/aman/nemo_gym/Gym
+        command:
+        - /home/aman/nemo_gym/Gym/.venv/bin/gym
+        - eval
+        - run
+        - --config
+        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/configs/toolsandbox.yaml
+        - --model
+        - sarvam-30b
+        - --split
+        - benchmark
+        - --output
+        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/llm06_toolsandbox/rollouts.jsonl
+        - --concurrency
+        - '16'
+        - --resume
+        env:
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: PYTHONUNBUFFERED
+          value: '1'
+        - name: NLTK_DATA
+          value: /home/aman/nltk_data
+        - name: POLARS_MAX_THREADS
+          value: '2'
+        - name: OMP_NUM_THREADS
+          value: '1'
+        - name: NEMO_GYM_MAX_ROLLOUT_ATTEMPTS
+          value: '10'
+        volumeMounts:
+        - name: code
+          mountPath: /home/aman/nemo_gym/Gym
+        - name: python
+          mountPath: /home/aman/.local/share/uv/python
+          readOnly: true
+        - name: nltk
+          mountPath: /home/aman/nltk_data
+          readOnly: true
+        resources:
+          requests:
+            cpu: '2'
+            memory: 4Gi
+          limits:
+            cpu: '16'
+            memory: 32Gi
+      volumes:
+      - name: code
+        hostPath:
+          path: /home/aman/nemo_gym/Gym
+          type: Directory
+      - name: python
+        hostPath:
+          path: /home/aman/.local/share/uv/python
+          type: Directory
+      - name: nltk
+        hostPath:
+          path: /home/aman/nltk_data
+          type: Directory
+      terminationGracePeriodSeconds: 120

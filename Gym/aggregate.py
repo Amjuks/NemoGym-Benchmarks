@@ -39,7 +39,8 @@ def aggregate(
         path = shard_folder / f"shard-{index}.jsonl"
         if not path.is_file():
             raise ValueError(f"Missing completed shard: {path}")
-        for line in path.read_text(encoding="utf-8").splitlines():
+        # JSONL records end at LF. Unicode separators inside JSON strings are data.
+        for line in path.read_text(encoding="utf-8").split("\n"):
             if not line.strip():
                 continue
             row = json.loads(line)
@@ -58,7 +59,7 @@ def aggregate(
             records.append(row)
     records.sort(key=lambda x: str(x["case_id"]))
     if input_path:
-        input_rows = [json.loads(line) for line in input_path.read_text().splitlines() if line.strip()]
+        input_rows = [json.loads(line) for line in input_path.read_text(encoding="utf-8").split("\n") if line.strip()]
         expected = {row["case_id"] for row in input_rows}
         if len(expected) != len(input_rows):
             raise ValueError("Input contains duplicate case IDs")

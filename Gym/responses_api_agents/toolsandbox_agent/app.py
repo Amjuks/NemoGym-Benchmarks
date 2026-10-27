@@ -43,6 +43,7 @@ from nemo_gym.openai_utils import (
     NeMoGymResponseUsage,
     accumulate_response_usage,
 )
+from nemo_gym.server_utils import raise_for_status
 from resources_servers.toolsandbox.schemas import (
     ToolSandboxNeMoGymResponse,
     ToolSandboxSeedSessionResponse,
@@ -108,7 +109,7 @@ class ToolSandboxAgent(SimpleResponsesAPIAgent):
             url_path="/seed_session",
             json={"task_idx": task_idx},
         )
-        reset_response.raise_for_status()
+        await raise_for_status(reset_response)
         seed = ToolSandboxSeedSessionResponse.model_validate(await reset_response.json())
         if not seed.obs:
             raise ValueError("No observations in seed session response")
@@ -143,12 +144,12 @@ class ToolSandboxAgent(SimpleResponsesAPIAgent):
                         json=agent_state,
                         cookies=model_server_cookies,
                     )
-                    raw.raise_for_status()
+                    await raise_for_status(raw)
                     model_server_cookies = raw.cookies
                     model_response_json = await raw.json()
                 except (json.JSONDecodeError, aiohttp.ClientResponseError) as e:
                     logger.warning(f"Error calling /v1/responses: {e!r}.")
-                    break
+                    raise
 
                 try:
                     model_response = NeMoGymResponse.model_validate(model_response_json)
@@ -182,7 +183,7 @@ class ToolSandboxAgent(SimpleResponsesAPIAgent):
                     url_path="/step",
                     json=step_payload,
                 )
-                raw_step.raise_for_status()
+                await raise_for_status(raw_step)
                 step_response = ToolSandboxStepResponse.model_validate(await raw_step.json())
                 obs = step_response.obs
                 done = step_response.done
@@ -197,11 +198,12 @@ class ToolSandboxAgent(SimpleResponsesAPIAgent):
                 if done:
                     break
         finally:
-            await self.server_client.post(
+            close_response = await self.server_client.post(
                 server_name=self.config.resources_server.name,
                 url_path="/close",
                 json={"env_id": env_id},
             )
+            await raise_for_status(close_response)
 
         assert model_response is not None, "Rollout terminated before the first agent turn completed."
 
@@ -224,6 +226,7 @@ class ToolSandboxAgent(SimpleResponsesAPIAgent):
                 url_path="/verify",
                 json=verify_request.model_dump(),
             )
+            await raise_for_status(verify_response)
             return ToolSandboxVerifyResponse.model_validate(await verify_response.json())
         except Exception:
             logger.exception("Error in run")

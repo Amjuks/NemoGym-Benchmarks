@@ -20,6 +20,7 @@ class ToolSpec(BaseModel):
     collection: str = ""
     id_field: str = ""
     record_id_field: str = ""
+    record_filters: dict[str, str] = Field(default_factory=dict)
     constants: dict[str, JsonValue] = Field(default_factory=dict)
     argument_scope: dict[str, list[JsonValue]] = Field(default_factory=dict)
     updates: dict[str, str] = Field(default_factory=dict)
@@ -163,7 +164,9 @@ class MockEnvironment:
                 (
                     r
                     for r in records
-                    if isinstance(r, dict) and r.get(tool.record_id_field or tool.id_field) == args.get(tool.id_field)
+                    if isinstance(r, dict)
+                    and r.get(tool.record_id_field or tool.id_field) == args.get(tool.id_field)
+                    and all(r.get(field) == args.get(argument) for argument, field in tool.record_filters.items())
                 ),
                 None,
             )

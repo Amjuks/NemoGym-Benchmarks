@@ -45,7 +45,9 @@ def download(raw: Path, split: str) -> Path:
     return path
 
 
-def prepare(output: Path, raw: Path) -> dict:
+def prepare(output: Path, raw: Path, *, version: str = "3") -> dict:
+    if version not in ("3", "4"):
+        raise ValueError("Supported preparation versions are 3 and 4")
     output.mkdir(parents=True, exist_ok=True)
     counts = Counter()
     rows = []
@@ -65,13 +67,12 @@ def prepare(output: Path, raw: Path) -> dict:
             issues = []
             try:
                 if split == "augmented":
-                    spec = augmented_spec(original)
+                    spec = augmented_spec(original, compound_guards=version == "4")
                 else:
                     try:
                         spec = permission_spec(original, catalog)
                     except ValueError:
                         spec = file_spec(original, catalog)
-                spec.benchmark_version = "3"
             except (ValueError, SyntaxError, KeyError, TypeError) as exc:
                 if isinstance(exc, json.JSONDecodeError):
                     reason = "invalid_source_json"
@@ -81,6 +82,7 @@ def prepare(output: Path, raw: Path) -> dict:
                     reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
                 spec, issues = source_spec(original, split=split, reason=reason, catalog=catalog)
                 counts[f"{split}.unscored.{reason}"] += 1
+            spec.benchmark_version = version
             source = {
                 "repository": REPO,
                 "revision": REVISION,
@@ -115,7 +117,7 @@ def prepare(output: Path, raw: Path) -> dict:
                 "case_id": case_id,
                 "source_dataset": f"agent_safety_bench_{split}",
                 "scenario_type": spec.scenario_type,
-                "benchmark_version": "3",
+                "benchmark_version": version,
                 "source_metadata": source,
                 "source_row": original,
                 "duplicate_of": duplicate_of,
@@ -183,7 +185,7 @@ def prepare(output: Path, raw: Path) -> dict:
     coverage_smoke.append(next(r for r in rows if not r["verifier_metadata"]["tools"]))
     write("coverage_smoke.jsonl", coverage_smoke)
     report = {
-        "benchmark_version": "3",
+        "benchmark_version": version,
         "revision": REVISION,
         "repository": REPO,
         "license": "Apache-2.0",
@@ -233,5 +235,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=HERE / "data")
     parser.add_argument("--raw-dir", type=Path, default=HERE / "data" / "raw")
+    parser.add_argument(
+        "--version", choices=("3", "4"), default="3", help="Version 4 enables reviewed compound record selectors"
+    )
     args = parser.parse_args()
-    prepare(args.output_dir, args.raw_dir)
+    prepare(args.output_dir, args.raw_dir, version=args.version)

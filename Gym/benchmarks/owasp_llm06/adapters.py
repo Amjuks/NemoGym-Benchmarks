@@ -62,7 +62,9 @@ def closed_schema(schema: dict) -> dict:
     return schema
 
 
-def compile_method(method: ast.FunctionDef, desc: dict, collections: dict, aliases: dict, index: int) -> ToolSpec:
+def compile_method(
+    method: ast.FunctionDef, desc: dict, collections: dict, aliases: dict, index: int, *, compound_guards: bool = False
+) -> ToolSpec:
     """Compile one flat getter, guarded record operation, append, or event stub."""
     schema = closed_schema(desc["parameters"])
     properties = schema.get("properties", {})
@@ -173,18 +175,30 @@ def compile_method(method: ast.FunctionDef, desc: dict, collections: dict, alias
     if len(guards) != 1 or guards[0].orelse:
         raise ValueError("unsupported_record_guard")
     guard = guards[0]
-    comparison = guard.test
-    if not (
-        isinstance(comparison, ast.Compare) and len(comparison.ops) == 1 and isinstance(comparison.ops[0], ast.Eq)
-    ):
-        raise ValueError("unsupported_record_guard")
-    field = record_field(comparison.left, variable)
-    argument = comparison.comparators[0]
-    if not field or not isinstance(argument, ast.Name) or argument.id not in properties:
-        raise ValueError("unsupported_record_guard")
+    comparisons = [guard.test]
+    if compound_guards and isinstance(guard.test, ast.BoolOp) and isinstance(guard.test.op, ast.And):
+        comparisons = guard.test.values
+    selectors = {}
+    for comparison in comparisons:
+        if not (
+            isinstance(comparison, ast.Compare) and len(comparison.ops) == 1 and isinstance(comparison.ops[0], ast.Eq)
+        ):
+            raise ValueError("unsupported_record_guard")
+        field = record_field(comparison.left, variable)
+        argument = comparison.comparators[0]
+        if (
+            not field
+            or not isinstance(argument, ast.Name)
+            or argument.id not in properties
+            or argument.id in selectors
+        ):
+            raise ValueError("unsupported_record_guard")
+        selectors[argument.id] = field
+    argument_name, field = next(iter(selectors.items()))
+    tool.record_filters = dict(list(selectors.items())[1:])
     if any(not isinstance(n, (ast.If, ast.Return)) for n in loop.body):
         raise ValueError("unsupported_record_loop")
-    tool.collection, tool.id_field, tool.record_id_field = f"env{index}.{collection}", argument.id, field
+    tool.collection, tool.id_field, tool.record_id_field = f"env{index}.{collection}", argument_name, field
     tool.operation = "read"
     for statement in guard.body:
         if isinstance(statement, ast.Return):
@@ -266,7 +280,7 @@ def compile_method(method: ast.FunctionDef, desc: dict, collections: dict, alias
     return tool
 
 
-def augmented_spec(row: dict) -> CaseSpec:
+def augmented_spec(row: dict, *, compound_guards: bool = False) -> CaseSpec:
     instruction = row["instruction"]
     inspection = re.search(
         r"\b(?:identify|check|verify|cross[- ]\w+|review|compare|audit|reconcile|validate)\b", instruction, re.I
@@ -306,7 +320,11 @@ def augmented_spec(row: dict) -> CaseSpec:
         for desc in descs:
             if desc["name"] not in methods:
                 raise ValueError("missing_tool_method")
-            tools.append(compile_method(methods[desc["name"]], desc, collections, aliases, index))
+            tools.append(
+                compile_method(
+                    methods[desc["name"]], desc, collections, aliases, index, compound_guards=compound_guards
+                )
+            )
     reads = [t.name for t in tools if t.operation == "read" and not t.id_field]
     writes = [t.name for t in tools if t.operation != "read"]
     if len(reads) < 2 or not writes:

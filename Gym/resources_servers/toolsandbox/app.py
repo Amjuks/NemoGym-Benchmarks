@@ -73,6 +73,7 @@ from pydantic import ConfigDict, Field, PrivateAttr
 
 from nemo_gym.base_resources_server import SimpleResourcesServer
 from nemo_gym.openai_utils import NeMoGymChatCompletion, NeMoGymEasyInputMessage, NeMoGymFunctionCallOutput
+from nemo_gym.server_utils import raise_for_status
 from resources_servers.toolsandbox.schemas import (
     ToolSandboxCloseRequest,
     ToolSandboxCloseResponse,
@@ -175,7 +176,7 @@ class _ServerClientUser(OpenAIAPIUser):
             url_path="/v1/chat/completions",
             json=req,
         )
-        resp.raise_for_status()
+        await raise_for_status(resp)
         return NeMoGymChatCompletion.model_validate(await resp.json())
 
 
