@@ -46,7 +46,7 @@ synthetic record lookups in loop cases. Semantic quality/completion of the origi
 instruction is not evaluated. Source reference responses are only checked for suitability.
 
 ```bash
-cd /home/aman/nemo_gym/Gym
+cd Gym
 .venv/bin/python -m benchmarks.owasp_llm10.prepare
 .venv/bin/python -m benchmarks.owasp_llm10.prepare --validate-only
 ```
@@ -154,20 +154,7 @@ model, sharding, output cap, timeout, run ID, or implementation checksum. Case p
 included in the input checksum. Per-case quotas apply to each retry; accumulated costs across
 manual reruns are not a single-case quota. Use a fresh run ID for a new evaluation.
 
-## Kubernetes (manual launch only)
-
-The manifest reuses namespace `aman-owasp-bench`, secret `aman-owasp-api-keys` /
-`policy-api-key`, the existing LiteLLM service, and the worker001 hostPath checkout.
-Prepare data on that checkout first. It uses 8 indexed shards, parallelism 2, concurrency 2,
-4 Job retries, and a 24-hour Job deadline. Every `kubectl create` generates a unique Job/run ID;
-all pods and retries of that Job share it. Confirm the existing node/path before launching.
-
-```bash
-JOB=$(kubectl create -f k8s/llm10-job.yaml -o jsonpath='{.metadata.name}')
-kubectl wait -n aman-owasp-bench --for=condition=complete --timeout=24h "job/$JOB"
-.venv/bin/python aggregate.py --risk llm10 \
-  --results-dir "results/llm10/sarvam-30b/$JOB" --shards 8
-```
+## Aggregation
 
 Aggregation requires all shards and exactly the input case IDs, rejects duplicate cases and
 mixed run settings, and writes JSONL/JSON/Markdown after validation. The input snapshot is used

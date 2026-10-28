@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+head_server:
+  host: 127.0.0.1
+  port: 43210
+skip_venv_if_present: true
+policy_model:
+  responses_api_models:
+    inference_provider:
+      extra_body:
+        stream: false
+        truncate_prompt_tokens: null
+      num_concurrent_requests: 8
+      uses_reasoning_parser: true
+      model: ${oc.env:MODEL,model}
+      base_url: ${oc.env:MODEL_URL,http://localhost:8000/v1}
+      api_key: ${evaluation.api_key}
+require_complete: true
+retain_results_in_memory: false
+max_resident_rollout_tasks: 8
+health_check_workers: 1
+responses_create_params:
+  max_output_tokens: 65536
+num_repeats: 1
+config_paths:
+- benchmarks/toolsandbox/config.yaml
+- responses_api_models/inference_provider/configs/inference_provider.yaml
+- resources_servers/toolsandbox/configs/user_model.yaml
+toolsandbox_benchmark_agent:
+  responses_api_agents:
+    toolsandbox_agent:
+      datasets:
+      - name: toolsandbox
+        type: benchmark
+        jsonl_fpath: benchmarks/toolsandbox/data/toolsandbox_benchmark.jsonl
+        prompt_config: null
+        prepare_script: benchmarks/toolsandbox/prepare.py
+        num_repeats: 1
+user_model:
+  responses_api_models:
+    openai_model:
+      openai_model: ${oc.env:USER_MODEL,gpt-oss-20b}
+      extra_body:
+        stream: false
+        truncate_prompt_tokens: null
+      upstream_request_timeout_seconds: 300
+      max_http_attempts: 1
+      upstream_max_num_tries: 1
+      upstream_retry_policy:
+        max_attempts: 5
+        backoff_initial_seconds: 2
+        backoff_multiplier: 2
+        backoff_jitter_fraction: 0.5
+        terminal_http_status_codes:
+        - 400
+        - 401
+        - 403
+        - 404
+        - 422
+      openai_base_url: ${oc.env:MODEL_URL,http://localhost:8000/v1}
+      openai_api_key: ${evaluation.api_key}
+toolsandbox_benchmark_resources_server:
+  resources_servers:
+    toolsandbox:
+      user_max_tokens: 65536
+      user_temperature: 0.0
+      user_model_server:
+        type: responses_api_models
+        name: user_model
+      user_model_name: ${oc.env:USER_MODEL,gpt-oss-20b}
+route_failures_to_sidecar: true
+num_samples_in_parallel: 8
+reuse_existing_data_preparation: true
+split: benchmark

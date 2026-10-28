@@ -1,7 +1,0 @@
-# Build from the NeMo Gym repository root so its package and verifier are available.
-FROM python:3.13-slim
-WORKDIR /workspace
-COPY . /workspace
-RUN python -m pip install --no-cache-dir -e . httpx
-ENV PYTHONUNBUFFERED=1
-ENTRYPOINT ["python", "run_standalone.py"]

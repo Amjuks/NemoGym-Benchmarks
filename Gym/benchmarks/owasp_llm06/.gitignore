@@ -1,11 +1,4 @@
-# Pinned source files can be restored with prepare.py; retain prepared artifacts.
+# Source data and prepared exports are rebuilt with prepare.py, not published.
 /data/raw/
-
-# The benchmark parent ignores JSONL; keep this benchmark's reviewable deliverables.
-!/data/prepared.jsonl
-!/data/smoke.jsonl
-!/data/exclusions.jsonl
-!/data/v1/*.jsonl
-!/data/v2/*.jsonl
-!/data/unscored.jsonl
-!/data/coverage_smoke.jsonl
+/data/**/*.jsonl
+/data/**/*.json

@@ -1,14 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-# Native full evaluations; Gym handles resume, failed tasks, and aggregation.
+# Example Jobs: prepare results/my-model-run first; configure node, host paths, UID/GID and env.yaml before use.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: aman-native-iheval-full-sx7wm41m
-  namespace: aman-owasp-bench
+  name: iheval-evaluation
+  namespace: owasp-bench
   labels:
-    app: aman-native-owasp
-    run-id: sarvam-30b-full-sx7wm41m
+    app: native-owasp
+    run-id: my-model-run
     benchmark: iheval
 spec:
   backoffLimit: 10
@@ -16,35 +16,31 @@ spec:
   template:
     metadata:
       labels:
-        app: aman-native-owasp
-        run-id: sarvam-30b-full-sx7wm41m
+        app: native-owasp
+        run-id: my-model-run
         benchmark: iheval
     spec:
       restartPolicy: Never
       nodeSelector:
-        kubernetes.io/hostname: soketlab-worker001
+        kubernetes.io/hostname: YOUR_WORKER_NODE
       securityContext:
-        runAsUser: 1018
-        runAsGroup: 1019
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
       - name: evaluator
         image: python:3.13-slim
         imagePullPolicy: IfNotPresent
-        workingDir: /home/aman/nemo_gym/Gym
+        workingDir: /workspace/Gym
         command:
-        - /home/aman/nemo_gym/Gym/.venv/bin/gym
+        - /workspace/Gym/.venv/bin/gym
         - eval
         - run
         - --config
-        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/configs/iheval.yaml
-        - --model
-        - sarvam-30b
-        - --split
-        - benchmark
+        - /workspace/Gym/results/my-model-run/iheval.yaml
         - --output
-        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/llm02_iheval/rollouts.jsonl
+        - /workspace/Gym/results/my-model-run/llm02_iheval/rollouts.jsonl
         - --concurrency
-        - '256'
+        - '64'
         - --resume
         env:
         - name: PYTHONDONTWRITEBYTECODE
@@ -52,7 +48,7 @@ spec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: NLTK_DATA
-          value: /home/aman/nltk_data
+          value: /home/user/nltk_data
         - name: POLARS_MAX_THREADS
           value: '2'
         - name: OMP_NUM_THREADS
@@ -61,12 +57,12 @@ spec:
           value: '10'
         volumeMounts:
         - name: code
-          mountPath: /home/aman/nemo_gym/Gym
+          mountPath: /workspace/Gym
         - name: python
-          mountPath: /home/aman/.local/share/uv/python
+          mountPath: /home/user/.local/share/uv/python
           readOnly: true
         - name: nltk
-          mountPath: /home/aman/nltk_data
+          mountPath: /home/user/nltk_data
           readOnly: true
         resources:
           requests:
@@ -78,26 +74,26 @@ spec:
       volumes:
       - name: code
         hostPath:
-          path: /home/aman/nemo_gym/Gym
+          path: /workspace/Gym
           type: Directory
       - name: python
         hostPath:
-          path: /home/aman/.local/share/uv/python
+          path: /home/user/.local/share/uv/python
           type: Directory
       - name: nltk
         hostPath:
-          path: /home/aman/nltk_data
+          path: /home/user/nltk_data
           type: Directory
       terminationGracePeriodSeconds: 120
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: aman-native-toolsandbox-full-sx7wm41m
-  namespace: aman-owasp-bench
+  name: toolsandbox-evaluation
+  namespace: owasp-bench
   labels:
-    app: aman-native-owasp
-    run-id: sarvam-30b-full-sx7wm41m
+    app: native-owasp
+    run-id: my-model-run
     benchmark: toolsandbox
 spec:
   backoffLimit: 10
@@ -105,35 +101,31 @@ spec:
   template:
     metadata:
       labels:
-        app: aman-native-owasp
-        run-id: sarvam-30b-full-sx7wm41m
+        app: native-owasp
+        run-id: my-model-run
         benchmark: toolsandbox
     spec:
       restartPolicy: Never
       nodeSelector:
-        kubernetes.io/hostname: soketlab-worker001
+        kubernetes.io/hostname: YOUR_WORKER_NODE
       securityContext:
-        runAsUser: 1018
-        runAsGroup: 1019
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
       - name: evaluator
         image: python:3.13-slim
         imagePullPolicy: IfNotPresent
-        workingDir: /home/aman/nemo_gym/Gym
+        workingDir: /workspace/Gym
         command:
-        - /home/aman/nemo_gym/Gym/.venv/bin/gym
+        - /workspace/Gym/.venv/bin/gym
         - eval
         - run
         - --config
-        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/configs/toolsandbox.yaml
-        - --model
-        - sarvam-30b
-        - --split
-        - benchmark
+        - /workspace/Gym/results/my-model-run/toolsandbox.yaml
         - --output
-        - /home/aman/nemo_gym/Gym/results/native_owasp/sarvam-30b-full-sx7wm41m/llm06_toolsandbox/rollouts.jsonl
+        - /workspace/Gym/results/my-model-run/llm06_toolsandbox/rollouts.jsonl
         - --concurrency
-        - '16'
+        - '8'
         - --resume
         env:
         - name: PYTHONDONTWRITEBYTECODE
@@ -141,7 +133,7 @@ spec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: NLTK_DATA
-          value: /home/aman/nltk_data
+          value: /home/user/nltk_data
         - name: POLARS_MAX_THREADS
           value: '2'
         - name: OMP_NUM_THREADS
@@ -150,12 +142,12 @@ spec:
           value: '10'
         volumeMounts:
         - name: code
-          mountPath: /home/aman/nemo_gym/Gym
+          mountPath: /workspace/Gym
         - name: python
-          mountPath: /home/aman/.local/share/uv/python
+          mountPath: /home/user/.local/share/uv/python
           readOnly: true
         - name: nltk
-          mountPath: /home/aman/nltk_data
+          mountPath: /home/user/nltk_data
           readOnly: true
         resources:
           requests:
@@ -167,14 +159,14 @@ spec:
       volumes:
       - name: code
         hostPath:
-          path: /home/aman/nemo_gym/Gym
+          path: /workspace/Gym
           type: Directory
       - name: python
         hostPath:
-          path: /home/aman/.local/share/uv/python
+          path: /home/user/.local/share/uv/python
           type: Directory
       - name: nltk
         hostPath:
-          path: /home/aman/nltk_data
+          path: /home/user/nltk_data
           type: Directory
       terminationGracePeriodSeconds: 120

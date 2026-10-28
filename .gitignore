@@ -356,3 +356,12 @@ temp*
 
 # Vim
 *.sw*
+
+# Local benchmark exports and deployment bundles (rebuild from source)
+/Gym/llm02_k8s_ready/
+/Gym/owasp_llm02_k8s_updated/
+/Gym/benchmarks/owasp_llm02/dataset_inspection.txt
+/Gym/benchmarks/owasp_llm*/data/**/*.jsonl
+/Gym/benchmarks/owasp_llm*/data/**/*.json
+/Gym/venvs/
+/Gym/.venvs/

@@ -2,7 +2,7 @@
 
 This benchmark uses the shared OWASP standalone runner and a native NeMo Gym trace verifier. All tools operate on isolated dictionaries and lists. Source Python is parsed into a restricted declarative representation and is never imported, compiled, or executed. There are no real filesystem, email, account, payment, network, or shell tool effects.
 
-The current release is **version 3**, which includes every source row. Historical [version 1](validation.md) and [version 2](validation-v2.md) validation records are preserved. See [version 3 validation](validation-v3.md) for this change.
+The current release is **version 3**, which includes every source row.
 
 ## Prepared dataset
 
@@ -48,16 +48,14 @@ Versions 2 and 3 normalize only the exact empty-argument object `{"": {}}` on to
 
 ### Standalone completion judge
 
-See [standalone judge validation](validation-standalone-judge.md) for actual `gpt` controls and rollout evidence.
-
 The standalone driver calls the judge **inside `verify()`**, using Gym's official `NeMoGymAsyncOpenAI` client and Responses schema. It starts **no Gym head, resources, or model servers**. This uses the external endpoint alternative described in the [official NeMo Gym v0.7.0 LLM-as-Judge guide](https://docs.nvidia.com/nemo/gym/v0.7.0/build-verifiers/verification-patterns/llm-as-judge/). Deterministic replay, evidence construction, strict verdict parsing, and security composition are shared with the native resources-server verifier.
 
-`resources_servers/owasp_llm06/configs/owasp_llm06.yaml` declares **`llm06_judge_model`** using standard Gym model/config fields. In standalone mode this declaration configures the in-process judge client; it does not launch a server. The independent settings are `judge_base_url`, `judge_api_key`, and `judge_model_name`. The model defaults to **`gpt`**, with address `http://172.17.99.1:31184/v1`. There are no `${policy_*}` references or fallbacks.
+`resources_servers/owasp_llm06/configs/owasp_llm06.yaml` declares **`llm06_judge_model`** using standard Gym model/config fields. In standalone mode this declaration configures the in-process judge client; it does not launch a server. The independent settings are `judge_base_url`, `judge_api_key`, and `judge_model_name`. The model defaults to **`gpt`**, with address `http://localhost:8000/v1`. There are no `${policy_*}` references or fallbacks.
 
 Set these independently in the private, ignored `env.yaml` (replace the credential placeholder):
 
 ```yaml
-judge_base_url: http://172.17.99.1:31184/v1
+judge_base_url: http://localhost:8000/v1
 judge_api_key: <judge credential>
 judge_model_name: gpt
 ```
@@ -71,7 +69,7 @@ Only the 552 scorable cases with ambiguous completion are judge-eligible. Exact 
 ## Prepare and validate
 
 ```bash
-cd /home/aman/nemo_gym/Gym
+cd Gym
 uv pip install --python .venv/bin/python pyarrow jsonschema pytest pytest-asyncio
 .venv/bin/python -m benchmarks.owasp_llm06.prepare
 .venv/bin/python -m pytest resources_servers/owasp_llm06/tests resources_servers/owasp_llm02/tests -q
@@ -100,52 +98,6 @@ Use the existing secret mechanism to set `POLICY_API_KEY` and the existing `/v1`
 Every pending LLM06 shard first proves an actual function call and API acceptance of its tool-result input. Marker acknowledgement is logged separately from protocol support. A text-only route fails before cases are requested. The gateway supports `tool_choice: required`; named-object tool choice was rejected. Capability checks use a 4,096-token ceiling for Sarvam reasoning.
 
 Incomplete generations preserve provider details, partial responses, usage, and prior tool attempts. Model/API/judge/trajectory errors remain unscored; there is no silent semantic success. The same resume command retries failed cases and skips completed rollouts, including cases whose scoring is unavailable. Keep model/input/sharding/judge fixed; a larger token budget for retry must be disclosed as a mixed-budget run.
-
-## Full cluster run — manual
-
-The updated manifest runs in the dedicated **`aman-owasp-bench`** namespace and evaluates all 4,220 rows and targets **`aman-owasp-llm06-v3-gpt-judge`** and **`run-004-gpt-judge`**. It uses independent policy and judge settings pointing at the existing LiteLLM service, eight indexed shards, eight concurrent pods, and two cases per pod. Each pod runs the standalone judge client in process; no Gym services are launched. `JUDGE_*` variables are written to a private YAML config at runtime; no judge setting falls back to `POLICY_*`. The checkout and hostPath are pinned to `soketlab-worker001`. Its setup gives generated run directories to the checkout owner so local aggregation can write reports. It does not change existing historical directories.
-
-```bash
-cd /home/aman/nemo_gym/Gym
-kubectl apply -f k8s/namespace-owasp.yaml
-.venv/bin/python k8s/setup-owasp-secrets.py --env-file env.yaml
-kubectl apply --dry-run=client -f k8s/job-llm06.yaml
-kubectl apply -f k8s/job-llm06.yaml
-kubectl wait -n aman-owasp-bench --for=condition=complete job/aman-owasp-llm06-v3-gpt-judge --timeout=24h && \
-.venv/bin/python aggregate.py --risk llm06 --shards 8 \
-  --results-dir results/llm06/sarvam-30b/run-004-gpt-judge
-```
-
-The namespace and secret bootstrap above creates only our namespace and `aman-owasp-api-keys`, using independently configured `policy_api_key` and `judge_api_key` values from private local `env.yaml`. It does not read or copy another namespace's secret. Secret values go to kubectl on stdin, never command arguments or temporary files. Repeat setup if either credential changes.
-
-Eight pods with two concurrent cases each allow up to sixteen active case rollouts. The hostPath still pins all evaluator pods to `soketlab-worker001`; this is pod-level parallelism on that node. Multi-node evaluators require shared storage or an image containing the same code/data. Both inference URLs continue using the existing fully qualified model-service address; no job or secret is created in that service's namespace.
-
-Monitor the job and pods:
-
-```bash
-kubectl -n aman-owasp-bench get job aman-owasp-llm06-v3-gpt-judge -w
-kubectl -n aman-owasp-bench get pods -l app=owasp-llm06
-kubectl -n aman-owasp-bench logs -l app=owasp-llm06 --prefix --tail=10 --max-log-requests=8
-```
-
-The manifest enables the independent standalone `gpt` judge through YAML configuration. Change `JUDGE_BASE_URL`, `JUDGE_API_KEY` secret reference, or `JUDGE_MODEL_NAME` independently if needed, and choose a fresh run ID for a different profile. No full evaluation is launched automatically.
-
-`run-004-gpt-judge/` contains `shards/`, the input/preparation snapshots, `all_results.jsonl`, `summary.json`, and `report.md`. The aggregator checks all input IDs and rejects duplicates or mixed versions/models before writing reports. Its default input is the immutable run snapshot when available.
-
-For root-owned historical directories, `--output-dir` writes an audit report elsewhere without altering shards:
-
-```bash
-.venv/bin/python aggregate.py --risk llm06 --shards 8 \
-  --input benchmarks/owasp_llm06/data/v1/prepared.jsonl \
-  --results-dir results/llm06/sarvam-30b/run-001 \
-  --output-dir results/llm06/sarvam-30b/run-001-audit
-```
-
-The original version 1 unscored case was recovered separately in `run-001-recovered/` (226/226 scored, zero errors), leaving `run-001` unchanged. For a similar bounded retry, use the archived input with the original model and eight-shard layout, `--shard-index 0`, the original `run-001/shards/shard-0.jsonl` output, and a writable execution context. Resume skips the other scored cases. Do not use a different version’s input or overwrite historical scores with a new grading profile.
-
-A job that reaches `Failed` must be inspected and recreated; applying the same manifest does not restart it. Connect waiting and aggregation with `&&` so an interrupted wait does not trigger premature aggregation.
-
-LLM02 remains the scripts' default. Its verifier and data are unchanged. The supported agentic path is the standalone runner; the native resources server supplies verification. No claim is made that Gym's `simple_agent` executes these in-process tools.
 
 ## Recovery after reviewing run 004
 

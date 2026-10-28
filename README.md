@@ -1,39 +1,114 @@
-# NeMo Gym OWASP Evaluation — Developer Handbook
+# NeMo Gym evaluation quickstart
 
-**Status:** This handbook describes the implementation discussed and exercised on the SoketLab cluster; it is **not** a live audit of your remote checkout. Verify paths, signatures and command flags against the checkout before changing code.
+Clone the repository and start in its `nemo_gym/` folder. Replace `your-model`, `http://SERVER:PORT/v1`, and the output folder with your settings.
 
-## Start here
-1. [Current implementation](docs/01-current-system.md)
-2. [Developer quickstart](docs/02-quickstart.md)
-3. [Datasets and conversion](docs/03-datasets.md)
-4. [Adding an OWASP risk](docs/04-new-risk.md)
-5. [Verifiers and tests](docs/05-verifiers.md)
-6. [Kubernetes execution](docs/06-kubernetes.md)
-7. [Results and reporting](docs/07-results-reporting.md)
-8. [Troubleshooting](docs/08-troubleshooting.md)
-9. [Standards and review checklist](docs/09-standards.md)
+## Setup
 
-The companion `.gitignore` is intended for the **parent `nemo_gym/` folder**. See `docs/10-git-layout.md` before initializing a parent repository.
+Requires Python 3.13.14+ and `uv`. Install dependencies and activate the environment:
 
-## Architecture
-
-```text
-source datasets -> benchmarks/owasp_llmXX/prepare.py
-                -> prepared Gym JSONL
-                -> run_standalone.py (current LLM02 execution path)
-                -> target model via LiteLLM
-                -> resources_servers/owasp_llmXX/app.py verifier
-                -> per-shard JSONL -> aggregate.py -> standardized results
+```bash
+cd Gym
+uv sync --extra dev
+uv pip install --directory resources_servers/iheval --python ../../.venv/bin/python -r requirements.txt
+uv pip install --directory resources_servers/toolsandbox --python ../../.venv/bin/python -r requirements.txt
+source .venv/bin/activate
+python -m nltk.downloader punkt punkt_tab
 ```
 
-**Important:** `run_standalone.py` and `aggregate.py` are project-specific convenience scripts, **not NVIDIA's standard Gym evaluation CLI**. The preferred longer-term direction is native Gym evaluation and verification. Do not confuse the two interfaces.
+Run the remaining commands from `Gym/` in the same terminal.
 
-## Repository boundaries
-- `Gym/`: upstream NVIDIA NeMo Gym checkout plus project-specific modifications.
-- `Gym/benchmarks/owasp_llm02/`: current prepared dataset and preparation code.
-- `Gym/resources_servers/owasp_llm02/`: LLM02 verifier.
-- `Gym/k8s/`: Kubernetes Job definitions.
-- `Gym/results/`: recommended centralized result location; typically ignored by Git.
+## Configure
 
-## Security and reproducibility
-Use synthetic/sanitized secrets, never commit credentials, and redact report examples. Record the exact Git commit, dataset versions, verifier version, model ID, inference endpoint identifier, run date, and parameters for every published evaluation.
+Copy the example configuration once, then edit `env.yaml` with your endpoint, API key,
+model, simulator, judge, and token budgets. If it already exists, add the example's
+`evaluation` section to it. Gym loads this private file automatically.
+
+```bash
+cp -n env.example.yaml env.yaml
+```
+
+Choose a fresh output folder. Reuse it when resuming the same run.
+
+```bash
+RUN='results/my-model-run'
+```
+
+Prepare the run folder, configuration files and reporting manifest. Native dataset builders
+download the public source data when it is not already cached.
+
+```bash
+python scripts/prepare_evaluation_run.py --output "$RUN"
+```
+
+Use an OpenAI-compatible endpoint with tool calling for ToolSandbox. The model, simulator, and judge must be available at that endpoint.
+
+Change settings in `env.yaml` before preparing a new run. Optional command-line flags,
+such as `--model`, override those settings. Generated configs reference the API key;
+they do not copy it into the results folder.
+
+## Run
+
+Run IHEval. Repeat this command to resume an interrupted run.
+
+```bash
+gym eval run --config "$RUN/iheval.yaml" --output "$RUN/llm02_iheval/rollouts.jsonl" --resume
+```
+
+Run ToolSandbox. Repeat this command to resume an interrupted run.
+
+```bash
+gym eval run --config "$RUN/toolsandbox.yaml" --output "$RUN/llm06_toolsandbox/rollouts.jsonl" --resume
+```
+
+Run safety judging after IHEval finishes.
+
+```bash
+gym eval reverify --config "$RUN/aegis.yaml" \
+  --inputs "$RUN/llm02_iheval/rollouts_materialized_inputs.jsonl" \
+  --rollouts "$RUN/llm02_iheval/rollouts.jsonl" \
+  --output "$RUN/llm02_iheval/aegis/rollouts.jsonl" --concurrency 16 --resume
+```
+
+## Export results
+
+Generate the overall benchmark-summary CSVs in `$RUN/csv/`.
+
+```bash
+python scripts/export_evaluation_results.py "$RUN" --summary-only
+```
+
+Generate the full-benchmark risk CSVs and column explanations in `$RUN/risk_csv/`.
+
+```bash
+python scripts/export_risk_results.py "$RUN"
+```
+
+## Kubernetes
+
+For cluster runs, adapt [Gym/k8s/job-native-full.yaml](Gym/k8s/job-native-full.yaml) with the run's
+config/output paths, worker node, host paths, and Python runtime paths. Prepare the run on the worker checkout at the same paths mounted inside the jobs.
+
+Create the evaluation namespace.
+
+```bash
+kubectl apply -f k8s/namespace-owasp.yaml
+```
+
+Place the private `env.yaml` in the worker's mounted `Gym/` checkout as well.
+
+Start both evaluations.
+
+```bash
+kubectl apply -f k8s/job-native-full.yaml
+```
+
+Check progress.
+
+```bash
+kubectl get jobs -n owasp-bench
+```
+
+Use a fresh run folder and distinct Job names for each model. Run safety judging and CSV export with the commands above once the jobs complete.
+
+Generated datasets, local credentials and evaluation results are excluded from Git and Docker build contexts.
+Upstream documentation and third-party notices remain in `Gym/`; see [LICENSE](LICENSE) and [Gym/ATTRIBUTIONS.md](Gym/ATTRIBUTIONS.md).

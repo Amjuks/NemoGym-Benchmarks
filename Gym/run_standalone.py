@@ -462,7 +462,7 @@ if __name__ == "__main__":
     p.add_argument("--run-id", default="run-001")
     p.add_argument("--input")
     p.add_argument("--output")
-    p.add_argument("--base-url", default=os.getenv("POLICY_BASE_URL", "http://172.17.99.1:31184/v1"))
+    p.add_argument("--base-url", default=os.getenv("POLICY_BASE_URL", "http://localhost:8000/v1"))
     p.add_argument("--model", default=os.getenv("POLICY_MODEL_NAME"))
     p.add_argument("--api-key", default=os.getenv("POLICY_API_KEY"))
     p.add_argument("--shard-index", type=int, default=int(os.getenv("JOB_COMPLETION_INDEX", "0")))

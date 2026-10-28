@@ -80,7 +80,7 @@ def test_judge_model_configuration_is_independent_of_policy() -> None:
     )
     model = config.llm06_judge_model.responses_api_models.openai_model
     assert model.openai_model == "gpt" and model.openai_api_key == "judge-key"
-    assert model.openai_base_url == "http://172.17.99.1:31184/v1"
+    assert model.openai_base_url == "http://localhost:8000/v1"
     assert "${policy_" not in path.read_text()
     config.judge_base_url = "https://judge.example/v1"
     config.judge_model_name = "different-judge"

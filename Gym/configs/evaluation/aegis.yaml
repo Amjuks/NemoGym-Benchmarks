@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+config_paths:
+- resources_servers/aegis_v4_safety/configs/aegis_v4_reverify.yaml
+- resources_servers/aegis_v4_safety/configs/aegis_v4_model.yaml
+head_server:
+  host: 127.0.0.1
+  port: 43210
+skip_venv_if_present: true
+health_check_workers: 1
+aegis_v4_model:
+  responses_api_models:
+    vllm_model:
+      base_url: ${oc.env:MODEL_URL,http://localhost:8000/v1}
+      api_key: ${evaluation.api_key}
+      model: ${oc.env:JUDGE_MODEL,nemotron-3-content-safety}
+      extra_body:
+        stream: false
+aegis_v4_safety:
+  resources_servers:
+    aegis_v4_safety:
+      judge_responses_create_params:
+        input: []
+        max_output_tokens: 16384
+        temperature: 0.01
+        top_p: 0.95

@@ -11,7 +11,7 @@ llm06_judge_model:
 
 # Independent judge settings. Supply judge_api_key in the private env.yaml.
 # Changing policy_* never changes this model server.
-judge_base_url: http://172.17.99.1:31184/v1
+judge_base_url: http://localhost:8000/v1
 judge_model_name: gpt
 judge_api_key: ???
 
